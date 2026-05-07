@@ -3,7 +3,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-go build -o /tmp/cligate-gate2 .
+go build -o /tmp/proxy-gate-test2 .
 
 PORT_UP=29537
 PORT_PROXY=29538
@@ -81,13 +81,13 @@ cat > "$POOLDIR/chatgpt/beta.json" <<JSON
 { "email":"beta@x.com","account_id":"acc-beta","plan_type":"plus","access_token":"tok-b","refresh_token":"r","expires_at":"2099-12-31T00:00:00Z","created_at":"2026-04-26T00:00:00Z" }
 JSON
 
-CLIGATE_ADDR="127.0.0.1:$PORT_PROXY" \
-CLIGATE_ADMIN_TOKEN="$TOKEN" \
-CLIGATE_DATA_DIR="$DATADIR" \
-CLIGATE_POOL_DIR="$POOLDIR" \
-CLIGATE_CHATGPT_BASE_URL="http://127.0.0.1:$PORT_UP/responses" \
-CLIGATE_CHATGPT_USAGE_URL="http://127.0.0.1:$PORT_UP/wham/usage" \
-/tmp/cligate-gate2 serve > /tmp/cligate-gate2.log 2>&1 &
+PROXYGATE_ADDR="127.0.0.1:$PORT_PROXY" \
+PROXYGATE_ADMIN_TOKEN="$TOKEN" \
+PROXYGATE_DATA_DIR="$DATADIR" \
+PROXYGATE_POOL_DIR="$POOLDIR" \
+PROXYGATE_CHATGPT_BASE_URL="http://127.0.0.1:$PORT_UP/responses" \
+PROXYGATE_CHATGPT_USAGE_URL="http://127.0.0.1:$PORT_UP/wham/usage" \
+/tmp/proxy-gate-test2 serve > /tmp/proxy-gate-test2.log 2>&1 &
 PROXY_PID=$!
 until curl -fsS "http://127.0.0.1:$PORT_PROXY/healthz" >/dev/null 2>&1; do sleep 0.2; done
 

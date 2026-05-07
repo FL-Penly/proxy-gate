@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/codeking-ai/cligate-v2/broker"
-	"github.com/codeking-ai/cligate-v2/provider"
+	"github.com/FL-Penly/proxy-gate/broker"
+	"github.com/FL-Penly/proxy-gate/provider"
 )
 
 const opencodeRequestBody = `{"model":"gpt-5.4-mini","input":[{"type":"message","role":"developer","content":"You are concise."},{"type":"message","role":"user","content":"hi"}],"include":["reasoning.encrypted_content"],"reasoning":{"effort":"medium","summary":"auto"},"store":false,"stream":true,"text":{"verbosity":"medium"},"tool_choice":"auto","tools":[],"prompt_cache_key":"abc123"}`
@@ -22,7 +22,7 @@ func TestParityChatGPTBackendBodyMatchesV1Adapter(t *testing.T) {
 	body := string(out)
 
 	if !strings.Contains(body, `"instructions":""`) {
-		t.Errorf("expected instructions:\"\" (matches v1 codex-pool's body.instructions=''), got: %s", body)
+		t.Errorf("expected instructions:\"\" (matches v1's body.instructions=''), got: %s", body)
 	}
 	if !strings.Contains(body, `"store":false`) {
 		t.Errorf("store must be false: %s", body)

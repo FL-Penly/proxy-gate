@@ -1,4 +1,4 @@
-# CliGate v2 configuration. Copy to config.toml and edit.
+# ProxyGate configuration. Copy to config.toml and edit.
 
 [server]
 # Bind address. 127.0.0.1 keeps the proxy local; set 0.0.0.0 to expose.

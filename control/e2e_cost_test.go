@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codeking-ai/cligate-v2/broker"
-	"github.com/codeking-ai/cligate-v2/control"
-	"github.com/codeking-ai/cligate-v2/ingress"
-	"github.com/codeking-ai/cligate-v2/pricing"
-	"github.com/codeking-ai/cligate-v2/provider"
-	"github.com/codeking-ai/cligate-v2/store"
+	"github.com/FL-Penly/proxy-gate/broker"
+	"github.com/FL-Penly/proxy-gate/control"
+	"github.com/FL-Penly/proxy-gate/ingress"
+	"github.com/FL-Penly/proxy-gate/pricing"
+	"github.com/FL-Penly/proxy-gate/provider"
+	"github.com/FL-Penly/proxy-gate/store"
 )
 
 const sseGPT54PriorityResponse = `event: response.created

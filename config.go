@@ -106,25 +106,25 @@ func LoadConfig(path string) (Config, error) {
 }
 
 func applyEnvOverrides(cfg *Config) {
-	if v := os.Getenv("CLIGATE_ADDR"); v != "" {
+	if v := os.Getenv("PROXYGATE_ADDR"); v != "" {
 		cfg.Server.Addr = v
 	}
-	if v := os.Getenv("CLIGATE_ADMIN_TOKEN"); v != "" {
+	if v := os.Getenv("PROXYGATE_ADMIN_TOKEN"); v != "" {
 		cfg.Server.AdminToken = v
 	}
-	if v := os.Getenv("CLIGATE_PUBLIC_BASE_URL"); v != "" {
+	if v := os.Getenv("PROXYGATE_PUBLIC_BASE_URL"); v != "" {
 		cfg.Server.PublicBaseURL = v
 	}
-	if v := os.Getenv("CLIGATE_DATA_DIR"); v != "" {
+	if v := os.Getenv("PROXYGATE_DATA_DIR"); v != "" {
 		cfg.Paths.DataDir = v
 	}
-	if v := os.Getenv("CLIGATE_POOL_DIR"); v != "" {
+	if v := os.Getenv("PROXYGATE_POOL_DIR"); v != "" {
 		cfg.Paths.PoolDir = v
 	}
-	if v := os.Getenv("CLIGATE_ROUTING_PRIORITY"); v != "" {
+	if v := os.Getenv("PROXYGATE_ROUTING_PRIORITY"); v != "" {
 		cfg.Routing.Priority = v
 	}
-	if v := os.Getenv("CLIGATE_LOG_LEVEL"); v != "" {
+	if v := os.Getenv("PROXYGATE_LOG_LEVEL"); v != "" {
 		cfg.Log.Level = v
 	}
 }
@@ -167,7 +167,7 @@ func (c *Config) normalize() error {
 }
 
 func (c Config) DBPath() string {
-	return filepath.Join(c.Paths.DataDir, "cligate.db")
+	return filepath.Join(c.Paths.DataDir, "proxygate.db")
 }
 
 func (c Config) PoolSubdir(kind string) string {

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codeking-ai/cligate-v2/broker"
-	"github.com/codeking-ai/cligate-v2/provider"
+	"github.com/FL-Penly/proxy-gate/broker"
+	"github.com/FL-Penly/proxy-gate/provider"
 )
 
 func newWhamAccount() *broker.Account {

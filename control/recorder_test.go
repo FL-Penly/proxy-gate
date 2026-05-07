@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codeking-ai/cligate-v2/broker"
-	"github.com/codeking-ai/cligate-v2/ingress"
-	"github.com/codeking-ai/cligate-v2/store"
+	"github.com/FL-Penly/proxy-gate/broker"
+	"github.com/FL-Penly/proxy-gate/ingress"
+	"github.com/FL-Penly/proxy-gate/store"
 )
 
 func newTestRecorder(t *testing.T) (*Recorder, *Queue, *store.Store) {

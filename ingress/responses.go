@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codeking-ai/cligate-v2/broker"
-	"github.com/codeking-ai/cligate-v2/provider"
-	"github.com/codeking-ai/cligate-v2/relay"
+	"github.com/FL-Penly/proxy-gate/broker"
+	"github.com/FL-Penly/proxy-gate/provider"
+	"github.com/FL-Penly/proxy-gate/relay"
 )
 
 const (

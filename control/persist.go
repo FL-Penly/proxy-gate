@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/codeking-ai/cligate-v2/store"
+	"github.com/FL-Penly/proxy-gate/store"
 	"go.etcd.io/bbolt"
 )
 

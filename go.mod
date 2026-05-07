@@ -1,4 +1,4 @@
-module github.com/codeking-ai/cligate-v2
+module github.com/FL-Penly/proxy-gate
 
 go 1.25.9
 

@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codeking-ai/cligate-v2/broker"
-	"github.com/codeking-ai/cligate-v2/pricing"
-	"github.com/codeking-ai/cligate-v2/store"
+	"github.com/FL-Penly/proxy-gate/broker"
+	"github.com/FL-Penly/proxy-gate/pricing"
+	"github.com/FL-Penly/proxy-gate/store"
 )
 
-const sessionCookie = "cligate_admin"
+const sessionCookie = "proxygate_admin"
 
 type OAuthStarter func(ctx context.Context) (authURL string, err error)
 

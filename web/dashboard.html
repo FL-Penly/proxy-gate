@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CliGate v2</title>
+<title>ProxyGate</title>
 <style>
 :root{
   --bg:#0d1117;--panel:#161b22;--panel2:#1c2129;--border:#30363d;
@@ -117,18 +117,18 @@ main{padding:18px 24px;max-width:1400px;margin:0 auto}
 
 <div id="login">
 <div class="box">
-<h1>CliGate v2</h1>
+<h1>ProxyGate</h1>
 <p>Enter your admin token to continue.</p>
 <input id="tok" type="password" placeholder="admin token" autocomplete="off" autofocus>
 <button id="loginBtn">Sign in</button>
 <div class="err" id="loginErr"></div>
-<div class="hint">cat ~/.cligate-v2/.admin_token</div>
+<div class="hint">cat ~/.proxy-gate/.admin_token</div>
 </div>
 </div>
 
 <div id="app" class="hidden">
 <header>
-<div><h1>CliGate v2 <span class="badge" id="addr"></span></h1></div>
+<div><h1>ProxyGate <span class="badge" id="addr"></span></h1></div>
 <div class="actions"><button id="refreshAll">Refresh</button><button id="logout">Sign out</button></div>
 </header>
 

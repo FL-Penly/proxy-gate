@@ -15,15 +15,15 @@ import (
 
 	"path/filepath"
 
-	"github.com/codeking-ai/cligate-v2/auth"
-	"github.com/codeking-ai/cligate-v2/broker"
-	"github.com/codeking-ai/cligate-v2/cmd"
-	"github.com/codeking-ai/cligate-v2/control"
-	"github.com/codeking-ai/cligate-v2/ingress"
-	"github.com/codeking-ai/cligate-v2/pricing"
-	"github.com/codeking-ai/cligate-v2/provider"
-	"github.com/codeking-ai/cligate-v2/store"
-	"github.com/codeking-ai/cligate-v2/web"
+	"github.com/FL-Penly/proxy-gate/auth"
+	"github.com/FL-Penly/proxy-gate/broker"
+	"github.com/FL-Penly/proxy-gate/cmd"
+	"github.com/FL-Penly/proxy-gate/control"
+	"github.com/FL-Penly/proxy-gate/ingress"
+	"github.com/FL-Penly/proxy-gate/pricing"
+	"github.com/FL-Penly/proxy-gate/provider"
+	"github.com/FL-Penly/proxy-gate/store"
+	"github.com/FL-Penly/proxy-gate/web"
 )
 
 func main() {
@@ -57,7 +57,7 @@ func run(args []string) error {
 	case "import-keys":
 		return cmdImportKeys(args)
 	case "version":
-		fmt.Println("cligate v2 (dev)")
+		fmt.Println("proxy-gate (dev)")
 		return nil
 	case "help", "-h", "--help":
 		printUsage()
@@ -69,7 +69,7 @@ func run(args []string) error {
 }
 
 func printUsage() {
-	fmt.Fprintln(os.Stderr, `cligate — proxy-code v2
+	fmt.Fprintln(os.Stderr, `proxy-gate — AI API proxy
 
 Commands:
   serve [--config=PATH]                 Run the HTTP proxy
@@ -168,11 +168,11 @@ func cmdServe(args []string) error {
 	logger.Info("pricing loaded", "origin", embedded.Origin, "models", len(embedded.Models))
 
 	chatgpt := provider.NewChatGPTClient()
-	if v := os.Getenv("CLIGATE_CHATGPT_BASE_URL"); v != "" {
+	if v := os.Getenv("PROXYGATE_CHATGPT_BASE_URL"); v != "" {
 		chatgpt.BaseURL = v
 		logger.Warn("upstream base URL overridden", "url", v)
 	}
-	if v := os.Getenv("CLIGATE_CHATGPT_USAGE_URL"); v != "" {
+	if v := os.Getenv("PROXYGATE_CHATGPT_USAGE_URL"); v != "" {
 		chatgpt.UsageURL = v
 	}
 	wham.Client = chatgpt
@@ -181,13 +181,13 @@ func cmdServe(args []string) error {
 	defer wham.Stop()
 
 	openai := provider.NewOpenAIClient()
-	if v := os.Getenv("CLIGATE_OPENAI_BASE_URL"); v != "" {
+	if v := os.Getenv("PROXYGATE_OPENAI_BASE_URL"); v != "" {
 		openai.BaseURL = v
 	}
 
-	proxyToken := os.Getenv("CLIGATE_PROXY_TOKEN")
+	proxyToken := os.Getenv("PROXYGATE_PROXY_TOKEN")
 	if proxyToken == "" {
-		logger.Warn("CLIGATE_PROXY_TOKEN unset, /v1/* endpoints accept any caller")
+		logger.Warn("PROXYGATE_PROXY_TOKEN unset, /v1/* endpoints accept any caller")
 	}
 
 	mux := http.NewServeMux()
@@ -219,7 +219,7 @@ func cmdServe(args []string) error {
 	mux.Handle("POST /responses/compact", responsesGated)
 
 	anthropicClient := provider.NewAnthropicClient()
-	if v := os.Getenv("CLIGATE_ANTHROPIC_BASE_URL"); v != "" {
+	if v := os.Getenv("PROXYGATE_ANTHROPIC_BASE_URL"); v != "" {
 		anthropicClient.BaseURL = v
 	}
 	messages := &ingress.MessagesHandler{
@@ -231,7 +231,7 @@ func cmdServe(args []string) error {
 	mux.Handle("POST /v1/messages", ingress.RequireProxyToken(proxyToken, messages))
 
 	chatClient := provider.NewChatCompletionsClient()
-	if v := os.Getenv("CLIGATE_CHAT_BASE_URL"); v != "" {
+	if v := os.Getenv("PROXYGATE_CHAT_BASE_URL"); v != "" {
 		chatClient.BaseURL = v
 	}
 	chat := &ingress.ChatHandler{

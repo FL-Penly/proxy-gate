@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codeking-ai/cligate-v2/broker"
+	"github.com/FL-Penly/proxy-gate/broker"
 )
 
 type v1Account struct {

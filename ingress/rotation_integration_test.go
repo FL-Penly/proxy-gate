@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/codeking-ai/cligate-v2/broker"
-	"github.com/codeking-ai/cligate-v2/provider"
+	"github.com/FL-Penly/proxy-gate/broker"
+	"github.com/FL-Penly/proxy-gate/provider"
 )
 
 func TestRotationOn429(t *testing.T) {

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-go build -o /tmp/cligate-gate4 .
+go build -o /tmp/proxy-gate-test4 .
 
 PORT_UP=29557
 PORT_PROXY=29558
@@ -56,13 +56,13 @@ cat > "$POOLDIR/apikeys/openai-1.json" <<JSON
 { "id":"openai-1","name":"o","type":"openai","api_key":"sk-openai-test" }
 JSON
 
-CLIGATE_ADDR="127.0.0.1:$PORT_PROXY" \
-CLIGATE_ADMIN_TOKEN="$TOKEN" \
-CLIGATE_DATA_DIR="$DATADIR" \
-CLIGATE_POOL_DIR="$POOLDIR" \
-CLIGATE_ANTHROPIC_BASE_URL="http://127.0.0.1:$PORT_UP/v1/messages" \
-CLIGATE_CHAT_BASE_URL="http://127.0.0.1:$PORT_UP/chat/completions" \
-/tmp/cligate-gate4 serve > /tmp/cligate-gate4.log 2>&1 &
+PROXYGATE_ADDR="127.0.0.1:$PORT_PROXY" \
+PROXYGATE_ADMIN_TOKEN="$TOKEN" \
+PROXYGATE_DATA_DIR="$DATADIR" \
+PROXYGATE_POOL_DIR="$POOLDIR" \
+PROXYGATE_ANTHROPIC_BASE_URL="http://127.0.0.1:$PORT_UP/v1/messages" \
+PROXYGATE_CHAT_BASE_URL="http://127.0.0.1:$PORT_UP/chat/completions" \
+/tmp/proxy-gate-test4 serve > /tmp/proxy-gate-test4.log 2>&1 &
 PROXY_PID=$!
 until curl -fsS "http://127.0.0.1:$PORT_PROXY/healthz" >/dev/null 2>&1; do sleep 0.2; done
 

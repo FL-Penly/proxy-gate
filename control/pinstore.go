@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/codeking-ai/cligate-v2/store"
+	"github.com/FL-Penly/proxy-gate/store"
 )
 
 type pinEntry struct {

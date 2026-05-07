@@ -3,7 +3,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-go build -o /tmp/cligate-gate .
+go build -o /tmp/proxy-gate-test .
 
 PORT_UP=29527
 PORT_PROXY=29528
@@ -72,12 +72,12 @@ cat > "$POOLDIR/chatgpt/test.json" <<JSON
 }
 JSON
 
-CLIGATE_ADDR="127.0.0.1:$PORT_PROXY" \
-CLIGATE_ADMIN_TOKEN="$TOKEN" \
-CLIGATE_DATA_DIR="$DATADIR" \
-CLIGATE_POOL_DIR="$POOLDIR" \
-CLIGATE_CHATGPT_BASE_URL="http://127.0.0.1:$PORT_UP/responses" \
-/tmp/cligate-gate serve > /tmp/cligate-gate.log 2>&1 &
+PROXYGATE_ADDR="127.0.0.1:$PORT_PROXY" \
+PROXYGATE_ADMIN_TOKEN="$TOKEN" \
+PROXYGATE_DATA_DIR="$DATADIR" \
+PROXYGATE_POOL_DIR="$POOLDIR" \
+PROXYGATE_CHATGPT_BASE_URL="http://127.0.0.1:$PORT_UP/responses" \
+/tmp/proxy-gate-test serve > /tmp/proxy-gate-test.log 2>&1 &
 PROXY_PID=$!
 
 until curl -fsS "http://127.0.0.1:$PORT_PROXY/healthz" >/dev/null 2>&1; do sleep 0.2; done

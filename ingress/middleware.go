@@ -145,7 +145,7 @@ func RequireProxyToken(token string, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if got == "" {
-			got = r.Header.Get("X-Cligate-Token")
+			got = r.Header.Get("X-ProxyGate-Token")
 		}
 		if subtle.ConstantTimeCompare([]byte(got), expected) != 1 {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)

@@ -1,14 +1,29 @@
+# Build artifacts
+/proxy-gate
+/proxy-gate-*
+dist/
+
+# Runtime data
 /data/
-/cligate
-/cligate-*
+/log/
 *.db
+*.log
+
+# Config (contains tokens)
 config.toml
+
+# Pool credentials (sensitive)
 pool/chatgpt/*.json
-pool/claude/*.json
 pool/apikeys/*.json
+
+# IDE / editor
 .DS_Store
+.idea/
+.vscode/
+.claude/
+.opencode/
+
+# Test artifacts
 *.test
 *.out
 coverage.txt
-.idea/
-.vscode/

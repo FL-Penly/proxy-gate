@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codeking-ai/cligate-v2/broker"
-	"github.com/codeking-ai/cligate-v2/store"
+	"github.com/FL-Penly/proxy-gate/broker"
+	"github.com/FL-Penly/proxy-gate/store"
 )
 
 func newTestAdmin(t *testing.T) (*AdminAPI, *store.Store, *Queue, *http.ServeMux) {

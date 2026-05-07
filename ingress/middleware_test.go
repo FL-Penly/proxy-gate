@@ -17,7 +17,7 @@ func TestAdaptMissingInstructionsBecomesEmptyString(t *testing.T) {
 		t.Fatalf("instructions field missing — upstream rejects with 400")
 	}
 	if instr.String() != "" {
-		t.Errorf("instructions = %q, want empty string (matches v1 codex-pool behavior)", instr.String())
+		t.Errorf("instructions = %q, want empty string (matches v1 behavior)", instr.String())
 	}
 	input := gjson.GetBytes(out, "input").Array()
 	if len(input) != 2 {
