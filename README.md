@@ -15,11 +15,22 @@ A single Go binary that pools multiple ChatGPT OAuth accounts and API keys, then
 - **Hot reload** — fsnotify watches pool directories; add/remove account files without restart
 - **macOS launchd** — deploy script with ad-hoc codesigning for launchd integration
 
+## Prerequisites
+
+- Go 1.22+ (build from source)
+
 ## Quick Start
 
 ```bash
+# Clone
+git clone https://github.com/FL-Penly/proxy-gate.git
+cd proxy-gate
+
 # Build
 go build -o proxy-gate .
+
+# Or install directly:
+# go install github.com/FL-Penly/proxy-gate@latest
 
 # Copy example config
 cp config.toml.example config.toml
@@ -33,6 +44,8 @@ mkdir -p pool/chatgpt pool/apikeys
 ```
 
 The server starts on `127.0.0.1:19527` by default. Open http://127.0.0.1:19527/ for the admin dashboard.
+
+> **Note:** You need at least one ChatGPT OAuth account or API key in the pool before the proxy can route requests. See [Adding Accounts](#adding-accounts) below.
 
 ## Adding Accounts
 
