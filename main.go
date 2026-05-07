@@ -243,6 +243,26 @@ func cmdServe(args []string) error {
 	}
 	mux.Handle("POST /v1/chat/completions", ingress.RequireProxyToken(proxyToken, chat))
 
+	passthrough := &ingress.PassthroughHandler{
+		Pool:      pool,
+		Refresher: refresher,
+		BaseURL:   chatgptBaseHost(chatgpt.BaseURL),
+		Logger:    logger,
+	}
+	modelsProxy := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.URL.Path = "/backend-api/codex/models"
+		passthrough.ServeHTTP(w, r)
+	})
+	mux.Handle("GET /v1/models", ingress.RequireProxyToken(proxyToken, modelsProxy))
+	mux.Handle("GET /models", ingress.RequireProxyToken(proxyToken, modelsProxy))
+	mux.Handle("/backend-api/", passthrough)
+	mux.Handle("/ps/", passthrough)
+	mux.Handle("/hazelnuts", passthrough)
+	mux.Handle("/hazelnuts/", passthrough)
+	mux.Handle("/plugins/", passthrough)
+	mux.Handle("/codex/", passthrough)
+	mux.Handle("/api/codex/", passthrough)
+
 	chatgptPoolDir := filepath.Join(cfg.Paths.PoolDir, "chatgpt")
 	oauthStarter := func(_ context.Context) (string, error) {
 		pkce, err := auth.NewPKCE()
@@ -530,6 +550,21 @@ func cmdList(args []string) error {
 		fmt.Println(n)
 	}
 	return nil
+}
+
+func chatgptBaseHost(fullURL string) string {
+	const defaultBase = "https://chatgpt.com"
+	idx := strings.Index(fullURL, "/backend-api/")
+	if idx > 0 {
+		return fullURL[:idx]
+	}
+	if strings.HasPrefix(fullURL, "http") {
+		parts := strings.SplitN(fullURL, "/", 4)
+		if len(parts) >= 3 {
+			return parts[0] + "//" + parts[2]
+		}
+	}
+	return defaultBase
 }
 
 func newLogger(level string) *slog.Logger {
