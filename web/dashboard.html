@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CliGate v2</title>
+<style>
+:root{
+  --bg:#0d1117;--panel:#161b22;--panel2:#1c2129;--border:#30363d;
+  --text:#e6edf3;--mute:#8b949e;--dim:#6e7681;
+  --accent:#58a6ff;--ok:#3fb950;--warn:#d29922;--bad:#f85149;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:13px/1.45 -apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif}
+header{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--panel)}
+header h1{margin:0;font-size:14px;font-weight:600;letter-spacing:.3px}
+header .badge{font-family:var(--mono);font-size:11px;color:var(--mute);margin-left:8px}
+header .actions{display:flex;align-items:center;gap:6px}
+header .actions button{background:transparent;border:1px solid var(--border);color:var(--text);padding:5px 12px;border-radius:5px;cursor:pointer;font-size:12px;font-family:var(--mono)}
+header .actions button:hover{background:var(--panel2);border-color:var(--accent)}
+main{padding:18px 24px;max-width:1400px;margin:0 auto}
+
+.summary{display:flex;gap:24px;padding:10px 14px;background:var(--panel);border:1px solid var(--border);border-radius:6px;margin-bottom:16px;font-size:12px;align-items:center}
+.summary .it{display:flex;gap:8px;align-items:baseline}
+.summary .lbl{color:var(--mute);text-transform:uppercase;font-size:10px;letter-spacing:.5px}
+.summary .val{font-family:var(--mono);font-size:14px}
+.summary .sep{flex:1}
+
+.section{margin-bottom:22px}
+.section .head{display:flex;align-items:center;justify-content:space-between;margin:0 0 8px}
+.section h2{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mute);margin:0;font-weight:600}
+.section .add{background:var(--accent);color:#fff;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:11px;font-family:var(--mono)}
+.section .add:hover{filter:brightness(1.1)}
+.section .add:disabled{opacity:.5;cursor:wait}
+.add-status{font-size:11px;color:var(--mute);font-family:var(--mono);margin-bottom:6px;padding:6px 10px;background:var(--panel);border:1px solid var(--border);border-radius:4px}
+.add-status.ok{color:var(--ok)}
+.add-status.err{color:var(--bad)}
+
+.term{background:var(--panel);border:1px solid var(--border);border-radius:6px;font-family:var(--mono);font-size:12px;overflow:hidden}
+.term .row{display:grid;grid-template-columns:14px 240px 50px 180px 1fr 1fr 76px 180px 130px;gap:14px;padding:7px 14px;align-items:center;border-bottom:1px solid var(--border);min-height:32px}
+.term .row:last-child{border-bottom:none}
+.term .row:hover{background:#1c21294d}
+.term .row.head{background:var(--panel2);color:var(--mute);font-size:10px;text-transform:uppercase;letter-spacing:.5px;min-height:auto}
+.term .row.head:hover{background:var(--panel2)}
+.term .row.k{grid-template-columns:14px 1fr 90px 90px 100px 200px 130px}
+
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%}
+.dot.ok{background:var(--ok)}
+.dot.warn{background:var(--warn)}
+.dot.bad{background:var(--bad)}
+.dot.dim{background:var(--dim)}
+
+.em{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.em .id{color:var(--dim);margin-left:6px}
+
+.chip{display:inline-block;font-size:10px;padding:1px 6px;border-radius:3px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.3px}
+.chip.plan{background:#1f6feb33;color:#79c0ff;border:1px solid #1f6feb55}
+.chip.cd{background:#d2992222;color:var(--warn);border:1px solid #d2992255}
+.chip.bad{background:#f8514922;color:var(--bad);border:1px solid #f8514955}
+.chip.warn{background:#d2992222;color:var(--warn);border:1px solid #d2992255}
+
+.stat-text{font-size:11px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.stat-text.ok{color:var(--ok)}
+.stat-text.cd{color:var(--warn)}
+.stat-text.bad{color:var(--bad)}
+.stat-text.dim{color:var(--dim)}
+
+.pmeter{display:flex;gap:6px;align-items:center;font-size:11px}
+.pmeter .label{color:var(--mute);width:8px;flex-shrink:0}
+.pmeter .track{flex:1;height:6px;background:var(--panel2);border:1px solid var(--border);border-radius:3px;overflow:hidden;max-width:140px;min-width:60px}
+.pmeter .fill{display:block;height:100%;background:var(--ok);transition:width .25s}
+.pmeter.crit .fill{background:var(--bad)}
+.pmeter .pct{color:var(--text);min-width:34px;text-align:right}
+.pmeter .reset{color:var(--dim);font-size:10px;min-width:48px}
+
+.age{color:var(--dim);font-size:10px;white-space:nowrap}
+.age.stale{color:var(--bad)}
+.today{color:var(--text);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.today.muted{color:var(--dim)}
+.cost{font-family:var(--mono);font-size:11px;color:var(--text);white-space:nowrap}
+.cost.zero{color:var(--dim)}
+.cost.unpriced{color:var(--warn)}
+.bymodel{font-family:var(--mono);font-size:10px;color:var(--mute);margin-top:4px;line-height:1.5}
+.bymodel .m{display:inline-block;margin-right:8px}
+.bymodel .m b{color:var(--text);font-weight:600}
+.priceFooter{font-family:var(--mono);font-size:10px;color:var(--dim);text-align:right;margin-top:14px}
+.subtotal{font-family:var(--mono);font-size:11px;color:var(--text);text-transform:none;letter-spacing:0;font-weight:400;margin-left:10px}
+.subtotal .tag{color:var(--mute);font-size:10px;text-transform:uppercase}
+
+.actions{display:flex;gap:4px;justify-content:flex-end}
+.btn{background:transparent;border:1px solid var(--border);color:var(--mute);padding:2px 8px;border-radius:3px;cursor:pointer;font-size:10px;font-family:var(--mono);white-space:nowrap}
+.btn:hover{color:var(--text);border-color:var(--accent)}
+.btn:disabled{opacity:.5;cursor:wait}
+.btn.danger:hover{color:var(--bad);border-color:var(--bad)}
+
+.empty{padding:20px;text-align:center;color:var(--mute);background:var(--panel);border:1px dashed var(--border);border-radius:6px}
+
+#login{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column}
+#login .box{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:32px;width:380px}
+#login h1{margin:0 0 6px;font-size:18px}
+#login p{color:var(--mute);font-size:12px;margin:0 0 20px}
+#login input{width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:6px;font-family:var(--mono);font-size:13px}
+#login input:focus{outline:none;border-color:var(--accent)}
+#login button{width:100%;margin-top:12px;background:var(--accent);color:#fff;border:none;padding:10px;border-radius:6px;cursor:pointer;font-weight:600}
+#login .err{color:var(--bad);font-size:12px;margin-top:8px;min-height:1em}
+#login .hint{color:var(--mute);font-size:11px;margin-top:16px;font-family:var(--mono)}
+.hidden{display:none!important}
+
+@media(max-width:1100px){
+  .term .row{grid-template-columns:14px 200px 50px 160px 1fr 1fr 70px 130px}
+  .term .row > :nth-last-child(1){display:none}
+}
+</style>
+</head>
+<body>
+
+<div id="login">
+<div class="box">
+<h1>CliGate v2</h1>
+<p>Enter your admin token to continue.</p>
+<input id="tok" type="password" placeholder="admin token" autocomplete="off" autofocus>
+<button id="loginBtn">Sign in</button>
+<div class="err" id="loginErr"></div>
+<div class="hint">cat ~/.cligate-v2/.admin_token</div>
+</div>
+</div>
+
+<div id="app" class="hidden">
+<header>
+<div><h1>CliGate v2 <span class="badge" id="addr"></span></h1></div>
+<div class="actions"><button id="refreshAll">Refresh</button><button id="logout">Sign out</button></div>
+</header>
+
+<main>
+<div class="summary">
+  <div class="it"><span class="lbl">Accts</span><span class="val" id="sAcc">-</span></div>
+  <div class="it"><span class="lbl">Keys</span><span class="val" id="sKey">-</span></div>
+  <div class="it"><span class="lbl">Today in</span><span class="val" id="sIn">-</span></div>
+  <div class="it"><span class="lbl">Today out</span><span class="val" id="sOut">-</span></div>
+  <div class="it" title="real money spent on API keys"><span class="lbl">$ Keys</span><span class="val" id="sReal">-</span></div>
+  <div class="it" title="equivalent API price for OAuth subscription traffic"><span class="lbl">$ OAuth (equiv)</span><span class="val" id="sEquiv">-</span></div>
+  <div class="sep"></div>
+  <div class="it"><span class="lbl">Listening</span><span class="val" id="sAddr"></span></div>
+</div>
+<div id="unpricedBanner" class="hidden" style="background:#f8514922;border:1px solid var(--bad);color:var(--bad);padding:8px 12px;border-radius:6px;margin-bottom:14px;font-family:var(--mono);font-size:11px"></div>
+
+<div class="section">
+  <div class="head">
+    <h2>OAuth accounts <span class="subtotal" id="accSubtotal"></span></h2>
+    <button class="add" id="addAccount">+ Add account</button>
+  </div>
+  <div class="add-status hidden" id="addStatus"></div>
+  <div id="accList"></div>
+</div>
+
+<div class="section">
+  <div class="head"><h2>API keys <span class="subtotal" id="keySubtotal"></span></h2></div>
+  <div id="keyList"></div>
+</div>
+<div id="priceFooter" class="priceFooter"></div>
+</main>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const fmtPct = (p) => Math.round((p||0)*100) + '%';
+const fmtNum = (n) => (n||0).toLocaleString();
+const esc = (s) => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtUSD = (n) => {
+  const v = Number(n||0);
+  if (v === 0) return '$0';
+  if (v < 0.0001) return '$' + v.toExponential(2);
+  if (v < 0.01) return '$' + v.toFixed(5);
+  if (v < 1) return '$' + v.toFixed(4);
+  if (v < 100) return '$' + v.toFixed(2);
+  return '$' + v.toFixed(0);
+};
+const fmtRelative = (iso) => {
+  if (!iso) return 'never';
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return '?';
+  const ms = Date.now() - t;
+  if (ms < 0) return 'soon';
+  const s = Math.floor(ms/1000);
+  if (s < 60) return s + 's ago';
+  const m = Math.floor(s/60);
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m/60);
+  if (h < 24) return h + 'h ago';
+  return Math.floor(h/24) + 'd ago';
+};
+
+async function api(path, opts) {
+  const r = await fetch(path, Object.assign({credentials:'same-origin'}, opts||{}));
+  if (r.status === 401 || r.status === 403) { showLogin(); throw new Error('auth'); }
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+function showLogin() { $('app').classList.add('hidden'); $('login').classList.remove('hidden'); $('tok').focus(); }
+function showApp()   { $('login').classList.add('hidden'); $('app').classList.remove('hidden'); }
+
+async function tryEnter() {
+  try { await api('/admin/accounts'); showApp(); load(); }
+  catch { showLogin(); }
+}
+
+$('loginBtn').onclick = async () => {
+  const tok = $('tok').value.trim();
+  if (!tok) return;
+  $('loginErr').textContent = '';
+  try {
+    const r = await fetch('/admin/ui/login', {method:'POST', body: tok, credentials:'same-origin'});
+    if (!r.ok) { $('loginErr').textContent = 'Invalid token'; return; }
+    $('tok').value = '';
+    showApp(); load();
+  } catch (e) { $('loginErr').textContent = String(e); }
+};
+$('tok').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginBtn').click(); });
+
+$('logout').onclick = async () => {
+  await fetch('/admin/ui/logout', {method:'POST', credentials:'same-origin'});
+  showLogin();
+};
+
+$('refreshAll').onclick = load;
+
+let watchTimer = null;
+$('addAccount').onclick = async () => {
+  const btn = $('addAccount'), st = $('addStatus');
+  btn.disabled = true;
+  st.classList.remove('hidden','ok','err');
+  st.textContent = 'opening OpenAI auth in new tab…';
+  try {
+    const r = await api('/admin/ui/oauth-start', {method:'POST'});
+    if (!r.auth_url) throw new Error('no auth_url');
+    const w = window.open(r.auth_url, '_blank');
+    if (!w) throw new Error('popup blocked — allow popups for this site');
+    st.textContent = 'waiting for OAuth completion (poll every 3s, max 5 min)…';
+    const baseline = (await api('/admin/accounts')).map(a => a.email).sort().join(',');
+    if (watchTimer) clearInterval(watchTimer);
+    let elapsed = 0;
+    watchTimer = setInterval(async () => {
+      elapsed += 3;
+      try {
+        const accs = await api('/admin/accounts');
+        const cur = accs.map(a => a.email).sort().join(',');
+        if (cur !== baseline) {
+          clearInterval(watchTimer); watchTimer = null;
+          st.classList.add('ok'); st.textContent = `account added (${accs.length} total)`;
+          btn.disabled = false;
+          load();
+          setTimeout(() => st.classList.add('hidden'), 5000);
+          return;
+        }
+      } catch {}
+      if (elapsed >= 300) {
+        clearInterval(watchTimer); watchTimer = null;
+        st.classList.add('err'); st.textContent = 'OAuth not completed within 5 min — try again';
+        btn.disabled = false;
+      }
+    }, 3000);
+  } catch (e) {
+    st.classList.add('err'); st.textContent = String(e.message || e);
+    btn.disabled = false;
+  }
+};
+
+function barClass(pct){ return pct >= 0.995 ? 'crit' : ''; }
+
+function fmtResetIn(iso) {
+  if (!iso) return '';
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return '';
+  const ms = t - Date.now();
+  if (ms <= 0) return 'now';
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60), m = mins % 60;
+  if (h < 24) return `${h}h${m}m`;
+  const d = Math.floor(h / 24), hr = h % 24;
+  return `${d}d${hr}h`;
+}
+
+function fmtAge(sec) {
+  if (sec == null) return '';
+  if (sec < 60) return `${sec}s`;
+  const m = Math.floor(sec / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h/24)}d`;
+}
+
+function fmtCooldown(iso) {
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return iso;
+  const d = new Date(t);
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  const HH = String(d.getHours()).padStart(2,'0');
+  const MM = String(d.getMinutes()).padStart(2,'0');
+  return `${mm}-${dd} ${HH}:${MM}`;
+}
+
+function dotClass(a) {
+  if (a.dead) return 'bad';
+  if (a.disabled) return 'dim';
+  if (a.cooldown_until || a.wham_limit_reached || a.wham_failing) return 'warn';
+  if ((a.secondary_used_pct||0) >= 0.995 || (a.primary_used_pct||0) >= 0.995) return 'bad';
+  return 'ok';
+}
+
+function statusCell(a) {
+  if (a.dead) return `<span class="stat-text bad">DEAD${a.dead_reason ? ' · '+esc(a.dead_reason.slice(0,40)) : ''}</span>`;
+  if (a.disabled) return `<span class="stat-text dim">disabled</span>`;
+  if (a.cooldown_until) return `<span class="stat-text cd"><span class="chip cd">CD</span>${fmtCooldown(a.cooldown_until)}</span>`;
+  if (a.wham_limit_reached) return `<span class="stat-text cd"><span class="chip warn">LIMIT</span></span>`;
+  if (a.wham_failing) return `<span class="stat-text cd"><span class="chip warn">WHAM ERR</span></span>`;
+  return `<span class="stat-text ok">active</span>`;
+}
+
+function renderAccount(a, today, costRow) {
+  const p = a.primary_used_pct || 0, s = a.secondary_used_pct || 0;
+  const ageSec = a.wham_age_seconds || 0;
+  const stale = ageSec >= 600;
+  const ageTxt = a.last_wham_at ? fmtAge(ageSec) : 'never';
+  const t = today || {};
+  const cost = (costRow && costRow.total_cost) || 0;
+  const unpriced = (costRow && costRow.unpriced) || 0;
+  const costClass = cost === 0 ? 'cost zero' : (unpriced > 0 ? 'cost unpriced' : 'cost');
+  const costLabel = cost > 0 ? fmtUSD(cost) : '-';
+  const todayTxt = (t.requests || t.input_tokens)
+    ? `<span class="today">${fmtNum(t.requests)}r · ${fmtNum(t.input_tokens)}/${fmtNum(t.output_tokens)} · <span class="${costClass}" title="equivalent API price for this subscription's traffic">${costLabel}</span></span>`
+    : `<span class="today muted">idle</span>`;
+  const bar = (p,r,sym) => `<div class="pmeter ${barClass(p)}"><span class="label">${sym}</span><span class="track"><span class="fill" style="width:${Math.min(100,p*100).toFixed(0)}%"></span></span><span class="pct">${fmtPct(p)}</span><span class="reset">${esc(r)}</span></div>`;
+  return `<div class="row" data-email="${esc(a.email)}">
+    <span class="dot ${dotClass(a)}"></span>
+    <span class="em">${esc(a.email)}</span>
+    <span><span class="chip plan">${esc(a.plan_type||'?')}</span></span>
+    <span>${statusCell(a)}</span>
+    ${bar(p, fmtResetIn(a.primary_reset_at), 'P')}
+    ${bar(s, fmtResetIn(a.secondary_reset_at), 'S')}
+    <span class="age ${stale ? 'stale' : ''}" title="${esc(a.last_wham_err||'')}">${stale ? '⚠ ' : ''}${ageTxt}</span>
+    ${todayTxt}
+    <span class="actions">
+      ${a.disabled
+        ? `<button class="btn" data-act="enable">Enable</button>`
+        : `<button class="btn" data-act="disable">Disable</button>`}
+      <button class="btn" data-act="refresh" title="Refresh OAuth token">↻</button>
+      <button class="btn danger" data-act="delete" title="Remove">×</button>
+    </span>
+  </div>`;
+}
+
+function renderKey(k, costRow) {
+  const status = k.disabled ? '<span class="stat-text dim">disabled</span>'
+              : k.dead ? `<span class="stat-text bad">DEAD${k.dead_reason ? ' · '+esc(k.dead_reason.slice(0,30)) : ''}</span>`
+              : k.cooldown_until ? `<span class="stat-text cd"><span class="chip cd">CD</span>${fmtCooldown(k.cooldown_until)}</span>`
+              : '<span class="stat-text ok">active</span>';
+  const dot = k.dead ? 'bad' : k.disabled ? 'dim' : k.cooldown_until ? 'warn' : 'ok';
+  const cost = (costRow && costRow.total_cost) || 0;
+  const unpriced = (costRow && costRow.unpriced) || 0;
+  const costClass = cost === 0 ? 'cost zero' : (unpriced > 0 ? 'cost unpriced' : 'cost');
+  const costLabel = cost > 0 ? fmtUSD(cost) : '-';
+  return `<div class="row k" data-id="${esc(k.id)}">
+    <span class="dot ${dot}"></span>
+    <span class="em">${esc(k.name||k.id)}<span class="id">${esc(k.id)}</span></span>
+    <span class="age">${esc(k.type)}</span>
+    <span>${status}</span>
+    <span class="age">${fmtNum(k.total_requests)} reqs</span>
+    <span class="age">${fmtNum(k.total_input_tokens)} / ${fmtNum(k.total_output_tokens)} · <span class="${costClass}">${costLabel}</span></span>
+    <span class="actions">
+      ${k.disabled
+        ? `<button class="btn" data-act="enable">Enable</button>`
+        : `<button class="btn" data-act="disable">Disable</button>`}
+      <button class="btn danger" data-act="delete" title="Remove">×</button>
+    </span>
+  </div>`;
+}
+
+const accHead = `<div class="row head">
+  <span></span><span>Email</span><span>Plan</span><span>Status</span>
+  <span>Primary (5h)</span><span>Secondary (weekly)</span>
+  <span>Polled</span><span>Today</span><span style="text-align:right">Actions</span>
+</div>`;
+
+const keyHead = `<div class="row head k">
+  <span></span><span>Name</span><span>Type</span><span>Status</span>
+  <span>Requests</span><span>In / Out</span><span style="text-align:right">Actions</span>
+</div>`;
+
+async function load() {
+  const host = location.host;
+  $('addr').textContent = host;
+  $('sAddr').textContent = host;
+  try {
+    const [accs, keys, usage, cost, priceStatus, unpriced] = await Promise.all([
+      api('/admin/accounts'),
+      api('/admin/keys').catch(()=>[]),
+      api('/admin/usage').catch(()=>({today:{}})),
+      api('/admin/usage/cost').catch(()=>({by_account:[], by_key:[], real_cost:0, equivalent_cost:0})),
+      api('/admin/pricing/status').catch(()=>null),
+      api('/admin/pricing/unpriced').catch(()=>[]),
+    ]);
+    const healthy = accs.filter(a => !a.dead && !a.disabled && !a.cooldown_until).length;
+    $('sAcc').textContent = `${accs.length} (${healthy} healthy)`;
+    $('sKey').textContent = keys.length;
+    const today = (usage && usage.today) || {};
+    $('sIn').textContent = fmtNum(today.input_tokens);
+    $('sOut').textContent = fmtNum(today.output_tokens);
+    $('sReal').textContent = fmtUSD(cost.real_cost);
+    $('sEquiv').textContent = fmtUSD(cost.equivalent_cost);
+
+    const accReqs = (cost.by_account||[]).reduce((s,r) => s + (r.requests||0), 0);
+    const keyReqs = (cost.by_key||[]).reduce((s,r) => s + (r.requests||0), 0);
+    $('accSubtotal').innerHTML = `<span class="tag">today equiv</span> ${fmtUSD(cost.equivalent_cost)} <span class="tag">·</span> ${fmtNum(accReqs)} reqs`;
+    $('keySubtotal').innerHTML = `<span class="tag">today real</span> ${fmtUSD(cost.real_cost)} <span class="tag">·</span> ${fmtNum(keyReqs)} reqs`;
+
+    const banner = $('unpricedBanner');
+    if (Array.isArray(unpriced) && unpriced.length) {
+      banner.innerHTML = '⚠ unpriced billing keys: ' + unpriced.slice(0,8).map(u => `<b>${esc(u.billing_key)}</b> (${u.count})`).join(', ') + (unpriced.length > 8 ? ` +${unpriced.length-8} more` : '');
+      banner.classList.remove('hidden');
+    } else {
+      banner.classList.add('hidden');
+    }
+
+    const accCostMap = {};
+    (cost.by_account||[]).forEach(r => accCostMap[r.id] = r);
+    const keyCostMap = {};
+    (cost.by_key||[]).forEach(r => keyCostMap[r.id] = r);
+
+    const byAccount = (usage && usage.by_account) || {};
+    const aList = $('accList');
+    aList.innerHTML = accs.length
+      ? `<div class="term">${accHead}${accs.map(a => renderAccount(a, byAccount[a.email], accCostMap[a.email])).join('')}</div>${renderByModel(cost.by_account, 'equivalent')}`
+      : '<div class="empty">No accounts</div>';
+    aList.querySelectorAll('button[data-act]').forEach(btn => btn.onclick = onAccAction);
+
+    const kList = $('keyList');
+    kList.innerHTML = keys.length
+      ? `<div class="term">${keyHead}${keys.map(k => renderKey(k, keyCostMap[k.id])).join('')}</div>${renderByModel(cost.by_key, 'real')}`
+      : '<div class="empty">No API keys</div>';
+    kList.querySelectorAll('button[data-act]').forEach(btn => btn.onclick = onKeyAction);
+
+    if (priceStatus) {
+      const fp = $('priceFooter');
+      const hint = priceStatus.last_success_at
+        ? `prices ${priceStatus.origin} · ${priceStatus.models_count} models · refreshed ${fmtRelative(priceStatus.last_success_at)}`
+        : `prices ${priceStatus.origin} · ${priceStatus.models_count} models · no remote refresh yet`;
+      fp.textContent = hint;
+    }
+  } catch(e) { console.warn('load', e); }
+}
+
+function renderByModel(rows, kind) {
+  if (!rows || !rows.length) return '';
+  const tally = {};
+  rows.forEach(r => {
+    (r.by_model||[]).forEach(m => {
+      const k = m.model + (m.service_tier ? '@'+m.service_tier : '');
+      if (!tally[k]) tally[k] = {model: m.model, tier: m.service_tier, cost: 0, requests: 0};
+      tally[k].cost += m.total_cost || 0;
+      tally[k].requests += m.requests || 0;
+    });
+  });
+  const items = Object.values(tally).sort((a,b) => b.cost - a.cost);
+  if (!items.length) return '';
+  const label = kind === 'equivalent' ? 'equivalent' : 'real';
+  return `<div class="bymodel">today by model (${label}): ${items.map(i => `<span class="m"><b>${esc(i.model)}${i.tier ? '@'+esc(i.tier) : ''}</b> ${fmtUSD(i.cost)} (${fmtNum(i.requests)})</span>`).join('')}</div>`;
+}
+
+async function onAccAction(e) {
+  const row = e.target.closest('.row');
+  const email = row.dataset.email;
+  const act = e.target.dataset.act;
+  e.target.disabled = true;
+  try {
+    if (act === 'disable') await api(`/admin/accounts/${encodeURIComponent(email)}/disable`, {method:'POST'});
+    else if (act === 'enable') await api(`/admin/accounts/${encodeURIComponent(email)}/enable`, {method:'POST'});
+    else if (act === 'refresh') await api(`/admin/accounts/${encodeURIComponent(email)}/refresh`, {method:'POST'});
+    else if (act === 'delete') {
+      if (!confirm(`Remove ${email}?`)) return;
+      await api(`/admin/accounts/${encodeURIComponent(email)}`, {method:'DELETE'});
+    }
+    load();
+  } catch(err) { alert(err.message); }
+  finally { e.target.disabled = false; }
+}
+
+async function onKeyAction(e) {
+  const row = e.target.closest('.row');
+  const id = row.dataset.id;
+  const act = e.target.dataset.act;
+  e.target.disabled = true;
+  try {
+    if (act === 'disable') await api(`/admin/keys/${encodeURIComponent(id)}/disable`, {method:'POST'});
+    else if (act === 'enable') await api(`/admin/keys/${encodeURIComponent(id)}/enable`, {method:'POST'});
+    else if (act === 'delete') {
+      if (!confirm(`Remove ${id}?`)) return;
+      await api(`/admin/keys/${encodeURIComponent(id)}`, {method:'DELETE'});
+    }
+    load();
+  } catch(err) { alert(err.message); }
+  finally { e.target.disabled = false; }
+}
+
+setInterval(() => { if (!$('app').classList.contains('hidden')) load(); }, 30000);
+tryEnter();
+</script>
+</body>
+</html>

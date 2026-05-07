@@ -1,0 +1,14 @@
+/data/
+/cligate
+/cligate-*
+*.db
+config.toml
+pool/chatgpt/*.json
+pool/claude/*.json
+pool/apikeys/*.json
+.DS_Store
+*.test
+*.out
+coverage.txt
+.idea/
+.vscode/

@@ -1,0 +1,44 @@
+# CliGate v2 configuration. Copy to config.toml and edit.
+
+[server]
+# Bind address. 127.0.0.1 keeps the proxy local; set 0.0.0.0 to expose.
+addr = "127.0.0.1:19527"
+
+# Admin endpoints are gated by this token (header X-Admin-Token).
+# Generate one with: openssl rand -hex 32
+admin_token = ""
+
+# Optional: a separate base URL clients should use when they hit /v1/*.
+# Defaults to http://<addr>/v1.
+public_base_url = ""
+
+[paths]
+# Working directory holding pool/ subfolders and the bbolt database.
+# Relative paths are resolved against the binary's working directory.
+data_dir = "./data"
+pool_dir = "./pool"
+
+[routing]
+# "account-first" tries OAuth accounts before API keys. "apikey-first" inverts.
+priority = "account-first"
+
+# Tier scoring multipliers and bonuses (used by Phase 2 selection algorithm).
+drain_multiplier = 1.0
+primary_bonus = 0.1
+
+[broker]
+# Hard exclusion thresholds.
+primary_used_pct_max = 0.95
+secondary_used_pct_max = 0.99
+
+# Conversation pin TTL. Subsequent requests carrying the same
+# previous_response_id within this window stick to the same account.
+pin_ttl = "1h"
+
+[wham]
+# How often to poll chatgpt.com/backend-api/wham/usage per account.
+poll_interval = "5m"
+
+[log]
+# "debug" | "info" | "warn" | "error"
+level = "info"
