@@ -296,6 +296,15 @@ type claudeAccountEntry struct {
 	inflight atomic.Int64
 }
 
+const (
+	claudeUsageProtectPct    = 0.95
+	claudeUsageFreshDuration = 15 * time.Minute
+	claudeWeeklyWeight       = 1.0
+	claudePrimaryWeight      = 0.5
+	claudeInflightPenalty    = 0.2
+	claudeHistoryLoadPenalty = 0.05
+)
+
 func NewClaudePool() *ClaudePool {
 	return &ClaudePool{accounts: make(map[string]*claudeAccountEntry)}
 }
@@ -303,10 +312,12 @@ func NewClaudePool() *ClaudePool {
 func (p *ClaudePool) Add(a *ClaudeAccount) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	entry := &claudeAccountEntry{account: a}
 	if existing := p.accounts[a.Email]; existing != nil {
 		a.ApplyStats(existing.account.Stats())
+		entry.inflight.Store(existing.inflight.Load())
 	}
-	p.accounts[a.Email] = &claudeAccountEntry{account: a}
+	p.accounts[a.Email] = entry
 }
 
 func (p *ClaudePool) Remove(email string) {
@@ -380,9 +391,21 @@ func (l *ClaudeLease) Release() {
 	e := p.accounts[l.Account.Email]
 	p.mu.RUnlock()
 	if e != nil {
-		e.inflight.Add(-1)
+		decrementInflight(e)
 	}
 	l.pool = nil
+}
+
+func decrementInflight(e *claudeAccountEntry) {
+	for {
+		v := e.inflight.Load()
+		if v <= 0 {
+			return
+		}
+		if e.inflight.CompareAndSwap(v, v-1) {
+			return
+		}
+	}
 }
 
 func (p *ClaudePool) Lease(_ context.Context) (*ClaudeLease, error) {
@@ -401,6 +424,49 @@ func (p *ClaudePool) Lease(_ context.Context) (*ClaudeLease, error) {
 	if len(candidates) == 0 {
 		return nil, ErrAllExhausted
 	}
+	chosen := chooseClaudeCandidate(candidates, now)
+	chosen.inflight.Add(1)
+	return &ClaudeLease{Account: chosen.account, pool: p}, nil
+}
+
+func chooseClaudeCandidate(candidates []*claudeAccountEntry, now time.Time) *claudeAccountEntry {
+	if !hasFreshClaudeUsageData(candidates, now) {
+		sortClaudeByTokenLoad(candidates)
+		return candidates[0]
+	}
+	ranked, usageScored := claudeRoutingCandidates(candidates, now)
+	if !usageScored {
+		sortClaudeByTokenLoad(ranked)
+		return ranked[0]
+	}
+	maxLoad := int64(1)
+	for _, e := range ranked {
+		if load := claudeTokenLoad(e.account); load > maxLoad {
+			maxLoad = load
+		}
+	}
+	sort.SliceStable(ranked, func(i, j int) bool {
+		ii := claudeUsageScore(ranked[i], maxLoad)
+		jj := claudeUsageScore(ranked[j], maxLoad)
+		if ii != jj {
+			return ii > jj
+		}
+		inI := ranked[i].inflight.Load()
+		inJ := ranked[j].inflight.Load()
+		if inI != inJ {
+			return inI < inJ
+		}
+		li := claudeTokenLoad(ranked[i].account)
+		lj := claudeTokenLoad(ranked[j].account)
+		if li != lj {
+			return li < lj
+		}
+		return ranked[i].account.Email < ranked[j].account.Email
+	})
+	return ranked[0]
+}
+
+func sortClaudeByTokenLoad(candidates []*claudeAccountEntry) {
 	sort.SliceStable(candidates, func(i, j int) bool {
 		ii := claudeTokenLoad(candidates[i].account)
 		jj := claudeTokenLoad(candidates[j].account)
@@ -414,9 +480,76 @@ func (p *ClaudePool) Lease(_ context.Context) (*ClaudeLease, error) {
 		}
 		return candidates[i].account.Email < candidates[j].account.Email
 	})
-	chosen := candidates[0]
-	chosen.inflight.Add(1)
-	return &ClaudeLease{Account: chosen.account, pool: p}, nil
+}
+
+func hasFreshClaudeUsageData(candidates []*claudeAccountEntry, now time.Time) bool {
+	for _, e := range candidates {
+		if st := e.account.state.Load(); st != nil && claudeUsageFresh(st, now) {
+			return true
+		}
+	}
+	return false
+}
+
+func claudeRoutingCandidates(candidates []*claudeAccountEntry, now time.Time) ([]*claudeAccountEntry, bool) {
+	eligibleKnown := make([]*claudeAccountEntry, 0, len(candidates))
+	protectedKnown := make([]*claudeAccountEntry, 0, len(candidates))
+	unknown := make([]*claudeAccountEntry, 0, len(candidates))
+	for _, e := range candidates {
+		st := e.account.state.Load()
+		if st == nil || !claudeUsageFresh(st, now) {
+			unknown = append(unknown, e)
+			continue
+		}
+		if claudeOverProtectThreshold(st) {
+			protectedKnown = append(protectedKnown, e)
+		} else {
+			eligibleKnown = append(eligibleKnown, e)
+		}
+	}
+	if len(eligibleKnown) > 0 {
+		return eligibleKnown, true
+	}
+	if len(unknown) > 0 {
+		return unknown, false
+	}
+	return protectedKnown, true
+}
+
+func claudeUsageFresh(st *claudeAccountState, now time.Time) bool {
+	return !st.LastUsageAt.IsZero() && !st.LastUsageAt.Before(now.Add(-claudeUsageFreshDuration))
+}
+
+func claudeOverProtectThreshold(st *claudeAccountState) bool {
+	return st.PrimaryUsedPct >= claudeUsageProtectPct || st.SecondaryUsedPct >= claudeUsageProtectPct
+}
+
+func claudeUsageScore(e *claudeAccountEntry, maxLoad int64) float64 {
+	primaryRem, secondaryRem := claudeRemaining(e.account)
+	loadPenalty := 0.0
+	if maxLoad > 0 {
+		loadPenalty = float64(claudeTokenLoad(e.account)) / float64(maxLoad) * claudeHistoryLoadPenalty
+	}
+	return secondaryRem*claudeWeeklyWeight + primaryRem*claudePrimaryWeight - float64(e.inflight.Load())*claudeInflightPenalty - loadPenalty
+}
+
+func claudeRemaining(a *ClaudeAccount) (float64, float64) {
+	st := a.state.Load()
+	if st == nil {
+		return 0, 0
+	}
+	return clampRemaining(st.PrimaryUsedPct), clampRemaining(st.SecondaryUsedPct)
+}
+
+func clampRemaining(used float64) float64 {
+	rem := 1.0 - used
+	if rem < 0 {
+		return 0
+	}
+	if rem > 1 {
+		return 1
+	}
+	return rem
 }
 
 func claudeTokenLoad(a *ClaudeAccount) int64 {
