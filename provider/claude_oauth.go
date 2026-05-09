@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -176,6 +177,7 @@ func GetClaudeUsage(ctx context.Context, accessToken string) (ClaudeUsage, error
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return ClaudeUsage{}, &TokenError{Status: resp.StatusCode, Body: strings.TrimSpace(string(body))}
 	}
+	slog.Debug("claude usage raw response", "status", resp.StatusCode, "body", string(body))
 	return parseClaudeUsage(body), nil
 }
 
@@ -205,7 +207,7 @@ func usagePct(window gjson.Result) float64 {
 	for _, path := range []string{"utilization", "used_percentage", "used_percent", "percentage", "usage_percent"} {
 		if v := window.Get(path); v.Exists() {
 			pct := v.Float()
-			if pct > 1 {
+			if pct >= 1 {
 				pct /= 100
 			}
 			if pct < 0 {
