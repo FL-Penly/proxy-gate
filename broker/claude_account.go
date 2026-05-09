@@ -297,7 +297,7 @@ type claudeAccountEntry struct {
 }
 
 const (
-	claudeUsageProtectPct    = 0.95
+	claudeUsageProtectPct    = 1.0
 	claudeUsageFreshDuration = 15 * time.Minute
 	claudeWeeklyWeight       = 1.0
 	claudePrimaryWeight      = 0.5

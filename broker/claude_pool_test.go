@@ -167,7 +167,7 @@ func TestClaudePoolProtectsNearlyExhaustedUsageWindows(t *testing.T) {
 	pool := NewClaudePool()
 	now := time.Now()
 	a := &ClaudeAccount{Email: "a@example.com", AccessToken: "tok-a"}
-	a.ApplyStats(ClaudeAccountStats{PrimaryUsedPct: 0.96, SecondaryUsedPct: 0.10, LastUsageAt: now})
+	a.ApplyStats(ClaudeAccountStats{PrimaryUsedPct: 1.0, SecondaryUsedPct: 0.10, LastUsageAt: now})
 	b := &ClaudeAccount{Email: "b@example.com", AccessToken: "tok-b"}
 	b.ApplyStats(ClaudeAccountStats{PrimaryUsedPct: 0.60, SecondaryUsedPct: 0.60, LastUsageAt: now})
 	pool.Add(a)
@@ -187,9 +187,9 @@ func TestClaudePoolFallsBackWhenAllUsageWindowsProtected(t *testing.T) {
 	pool := NewClaudePool()
 	now := time.Now()
 	a := &ClaudeAccount{Email: "a@example.com", AccessToken: "tok-a"}
-	a.ApplyStats(ClaudeAccountStats{PrimaryUsedPct: 0.96, SecondaryUsedPct: 0.80, LastUsageAt: now})
+	a.ApplyStats(ClaudeAccountStats{PrimaryUsedPct: 1.0, SecondaryUsedPct: 0.80, LastUsageAt: now})
 	b := &ClaudeAccount{Email: "b@example.com", AccessToken: "tok-b"}
-	b.ApplyStats(ClaudeAccountStats{PrimaryUsedPct: 0.99, SecondaryUsedPct: 0.99, LastUsageAt: now})
+	b.ApplyStats(ClaudeAccountStats{PrimaryUsedPct: 1.0, SecondaryUsedPct: 0.99, LastUsageAt: now})
 	pool.Add(a)
 	pool.Add(b)
 
@@ -227,7 +227,7 @@ func TestClaudePoolUnknownUsageBeatsKnownProtectedUsage(t *testing.T) {
 	pool := NewClaudePool()
 	now := time.Now()
 	a := &ClaudeAccount{Email: "a@example.com", AccessToken: "tok-a"}
-	a.ApplyStats(ClaudeAccountStats{PrimaryUsedPct: 0.96, SecondaryUsedPct: 0.60, LastUsageAt: now})
+	a.ApplyStats(ClaudeAccountStats{PrimaryUsedPct: 1.0, SecondaryUsedPct: 0.60, LastUsageAt: now})
 	b := &ClaudeAccount{Email: "b@example.com", AccessToken: "tok-b"}
 	b.ApplyStats(ClaudeAccountStats{})
 	pool.Add(a)
