@@ -12,10 +12,22 @@ var codexAliases = map[string]string{
 	"gpt-5.3-codex": "gpt-5.2-codex",
 }
 
+var modelAliases = map[string]string{
+	"claude-haiku-4-5-20251001": "claude-haiku-4-5",
+}
+
+var fallbackPrices = map[string]CompactPrice{
+	"claude-haiku-4-5":  {InputCost: 1e-6, OutputCost: 5e-6, CacheReadCost: 1e-7},
+	"claude-sonnet-4-6": {InputCost: 3e-6, OutputCost: 15e-6, CacheReadCost: 3e-7},
+	"claude-opus-4-7":   {InputCost: 15e-6, OutputCost: 75e-6, CacheReadCost: 1.5e-6},
+}
+
 var providerPrefixes = []string{
 	"openai/",
 	"azure/",
 	"openrouter/openai/",
+	"anthropic/",
+	"openrouter/anthropic/",
 }
 
 type Source struct {
@@ -70,6 +82,17 @@ func (s *Source) Lookup(model string) (CompactPrice, bool) {
 			return p, true
 		}
 	}
+	if alias, ok := modelAliases[model]; ok {
+		if p, ok := lookupIn(snap.Models, alias); ok {
+			return p, true
+		}
+		if p, ok := fallbackPrices[alias]; ok && p.HasPricing() {
+			return p, true
+		}
+	}
+	if p, ok := fallbackPrices[model]; ok && p.HasPricing() {
+		return p, true
+	}
 	return CompactPrice{}, false
 }
 
@@ -99,9 +122,11 @@ func lookupIn(models map[string]CompactPrice, model string) (CompactPrice, bool)
 			return p, true
 		}
 	}
-	if stripped, ok := strings.CutPrefix(model, "openai/"); ok {
-		if p, ok := models[stripped]; ok && p.HasPricing() {
-			return p, true
+	for _, prefix := range providerPrefixes {
+		if stripped, ok := strings.CutPrefix(model, prefix); ok {
+			if p, ok := models[stripped]; ok && p.HasPricing() {
+				return p, true
+			}
 		}
 	}
 	return CompactPrice{}, false

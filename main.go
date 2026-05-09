@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -44,8 +45,12 @@ func run(args []string) error {
 		return cmdServe(args)
 	case "add-account":
 		return cmdAddAccount(args)
+	case "add-claude-account":
+		return cmdAddClaudeAccount(args)
 	case "list":
 		return cmdList(args)
+	case "list-claude":
+		return cmdListClaude(args)
 	case "status":
 		return cmdStatus(args)
 	case "disable":
@@ -75,7 +80,9 @@ Commands:
   serve [--config=PATH]                 Run the HTTP proxy
   add-account [--config=PATH] [--no-browser]   Add a ChatGPT account via OAuth
   add-account --code=URL_OR_CODE        Add an account via a copy-pasted code
+  add-claude-account --from=PATH [--email=EMAIL] Import a Claude Code OAuth account
   list [--config=PATH]                  List accounts in pool/chatgpt/
+  list-claude [--config=PATH]            List accounts in pool/claude/
   status [--config=PATH]                Show account/key counts and current usage
   disable <email|id> [--config=PATH]    Mark an account or API key disabled
   enable <email|id> [--config=PATH]     Re-enable an account or API key
@@ -138,13 +145,24 @@ func cmdServe(args []string) error {
 	}
 	logger.Info("key pool loaded", "keys", keyPool.Len(), "dir", keyDir)
 
+	claudePool := broker.NewClaudePool()
+	claudeDir := cfg.PoolSubdir("claude")
+	if err := claudePool.LoadDir(claudeDir); err != nil {
+		return err
+	}
+	logger.Info("claude pool loaded", "accounts", claudePool.Len(), "dir", claudeDir)
+
 	loadAccountStats(st, pool)
+	loadClaudeStats(st, claudePool)
 	loadKeyStats(st, keyPool)
 
 	ctxWatch, stopWatch := context.WithCancel(context.Background())
 	defer stopWatch()
 	if err := pool.WatchDir(ctxWatch, chatgptDir, logger); err != nil {
 		logger.Warn("pool watcher disabled", "err", err)
+	}
+	if err := claudePool.WatchDir(ctxWatch, claudeDir, logger); err != nil {
+		logger.Warn("claude pool watcher disabled", "err", err)
 	}
 
 	wham := &control.WhamPoller{
@@ -154,7 +172,9 @@ func cmdServe(args []string) error {
 	}
 
 	recorder := control.NewRecorder(st, queue, pool)
+	recorder.SetClaudePool(claudePool)
 	refresher := &control.TokenRefresher{PoolDir: chatgptDir, Queue: queue}
+	claudeRefresher := &control.ClaudeTokenRefresher{PoolDir: claudeDir, Queue: queue}
 
 	embedded, embErr := pricing.LoadEmbedded()
 	if embErr != nil {
@@ -175,10 +195,16 @@ func cmdServe(args []string) error {
 	if v := os.Getenv("PROXYGATE_CHATGPT_USAGE_URL"); v != "" {
 		chatgpt.UsageURL = v
 	}
+	if v := os.Getenv("PROXYGATE_CLAUDE_USAGE_URL"); v != "" {
+		provider.ClaudeUsageURLOverride = v
+	}
 	wham.Client = chatgpt
 	wham.Refresher = refresher
 	wham.Start(ctxWatch)
 	defer wham.Stop()
+	claudeUsage := &control.ClaudeUsagePoller{Pool: claudePool, Refresher: claudeRefresher, Queue: queue, Interval: cfg.Wham.PollInterval, Logger: logger}
+	claudeUsage.Start(ctxWatch)
+	defer claudeUsage.Stop()
 
 	openai := provider.NewOpenAIClient()
 	if v := os.Getenv("PROXYGATE_OPENAI_BASE_URL"); v != "" {
@@ -223,12 +249,29 @@ func cmdServe(args []string) error {
 		anthropicClient.BaseURL = v
 	}
 	messages := &ingress.MessagesHandler{
-		KeyPool:   keyPool,
-		Anthropic: anthropicClient,
-		Recorder:  recorder,
-		Logger:    logger,
+		ClaudePool:      claudePool,
+		KeyPool:         keyPool,
+		Anthropic:       anthropicClient,
+		Recorder:        recorder,
+		ClaudeRefresher: claudeRefresher,
+		Pricer:          priceSrc,
+		Priority:        cfg.Routing.Priority,
+		Logger:          logger,
 	}
-	mux.Handle("POST /v1/messages", ingress.RequireProxyToken(proxyToken, messages))
+	mux.Handle("POST /v1/messages", ingress.RequireProxyTokenOr(proxyToken, messages, func(token string) bool {
+		if token == "" || claudePool == nil {
+			return false
+		}
+		if strings.HasPrefix(token, "sk-ant-oat") {
+			return true
+		}
+		for _, acc := range claudePool.List() {
+			if subtle.ConstantTimeCompare([]byte(token), []byte(acc.AccessToken)) == 1 {
+				return true
+			}
+		}
+		return false
+	}))
 
 	chatClient := provider.NewChatCompletionsClient()
 	if v := os.Getenv("PROXYGATE_CHAT_BASE_URL"); v != "" {
@@ -324,16 +367,76 @@ func cmdServe(args []string) error {
 		}()
 		return authURL, nil
 	}
+	claudeOAuthStarter := func(_ context.Context) (string, error) {
+		pkce, err := auth.NewPKCE()
+		if err != nil {
+			return "", err
+		}
+		state, err := auth.NewState()
+		if err != nil {
+			return "", err
+		}
+		cb, err := auth.StartClaudeCallback(context.Background(), state)
+		if err != nil {
+			return "", err
+		}
+		authURL := auth.ClaudeAuthorizeURL(cb.RedirectURI(), pkce.Challenge, state)
+		go func() {
+			defer cb.Close()
+			waitCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			res, werr := cb.Wait(waitCtx)
+			if werr != nil {
+				logger.Warn("claude oauth: callback failed", "err", werr)
+				return
+			}
+			tok, exErr := provider.ExchangeClaudeCode(waitCtx, res.Code, pkce.Verifier, cb.RedirectURI(), res.State)
+			if exErr != nil {
+				logger.Warn("claude oauth: exchange failed", "err", exErr)
+				return
+			}
+			prof, perr := provider.GetClaudeProfile(waitCtx, tok.AccessToken)
+			if perr != nil {
+				logger.Warn("claude oauth: profile failed", "err", perr)
+				return
+			}
+			if prof.Email == "" {
+				logger.Warn("claude oauth: empty email in profile")
+				return
+			}
+			acc := &broker.ClaudeAccount{
+				Email:            prof.Email,
+				AccountID:        prof.AccountID,
+				SubscriptionType: prof.SubscriptionType,
+				RateLimitTier:    prof.RateLimitTier,
+				AccessToken:      tok.AccessToken,
+				RefreshToken:     tok.RefreshToken,
+				ExpiresAt:        tok.ExpiresAt,
+				CreatedAt:        time.Now().UTC(),
+			}
+			path, serr := broker.SaveClaudeAccountFile(claudeDir, acc)
+			if serr != nil {
+				logger.Warn("claude oauth: save failed", "err", serr)
+				return
+			}
+			claudePool.Add(acc)
+			logger.Info("claude oauth: account added", "email", acc.Email, "path", path)
+		}()
+		return authURL, nil
+	}
 
 	admin := &control.AdminAPI{
-		Pool:       pool,
-		KeyPool:    keyPool,
-		Recorder:   recorder,
-		Refresher:  refresher,
-		Pricing:    priceService,
-		Queue:      queue,
-		Token:      cfg.Server.AdminToken,
-		OAuthStart: oauthStarter,
+		Pool:             pool,
+		ClaudePool:       claudePool,
+		KeyPool:          keyPool,
+		Recorder:         recorder,
+		Refresher:        refresher,
+		ClaudeRefresher:  claudeRefresher,
+		Pricing:          priceService,
+		Queue:            queue,
+		Token:            cfg.Server.AdminToken,
+		OAuthStart:       oauthStarter,
+		ClaudeOAuthStart: claudeOAuthStarter,
 	}
 	admin.Mount(mux)
 
@@ -415,15 +518,39 @@ func cmdStatus(args []string) error {
 		return err
 	}
 	chatgptDir := cfg.PoolSubdir("chatgpt")
+	claudeDir := cfg.PoolSubdir("claude")
 	keyDir := cfg.PoolSubdir("apikeys")
 	accs, _ := cmd.ListAccounts(chatgptDir)
+	claudeAccs, _ := cmd.ListAccounts(claudeDir)
 	keys, _ := cmd.ListAccounts(keyDir)
 	fmt.Printf("addr:        %s\n", cfg.Server.Addr)
 	fmt.Printf("data_dir:    %s\n", cfg.Paths.DataDir)
 	fmt.Printf("pool_dir:    %s\n", cfg.Paths.PoolDir)
 	fmt.Printf("priority:    %s\n", cfg.Routing.Priority)
 	fmt.Printf("accounts:    %d\n", len(accs))
+	fmt.Printf("claude_accounts: %d\n", len(claudeAccs))
 	fmt.Printf("api_keys:    %d\n", len(keys))
+	return nil
+}
+
+func cmdAddClaudeAccount(args []string) error {
+	from := flagValue(args, "--from=")
+	if from == "" {
+		return fmt.Errorf("--from=PATH required")
+	}
+	cfg, err := LoadConfig(parseConfigPath(args))
+	if err != nil {
+		return err
+	}
+	dir := cfg.PoolSubdir("claude")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	acc, err := cmd.ImportClaudeAccount(from, dir, flagValue(args, "--email="))
+	if err != nil {
+		return err
+	}
+	fmt.Println("added claude:", acc.Email)
 	return nil
 }
 
@@ -437,6 +564,7 @@ func cmdDisable(args []string, disable bool) error {
 		return err
 	}
 	chatgptDir := cfg.PoolSubdir("chatgpt")
+	claudeDir := cfg.PoolSubdir("claude")
 	keyDir := cfg.PoolSubdir("apikeys")
 
 	st, err := store.Open(cfg.DBPath())
@@ -453,6 +581,10 @@ func cmdDisable(args []string, disable bool) error {
 	}
 	keyPool := broker.NewAPIKeyPool()
 	if err := keyPool.LoadDir(keyDir); err != nil {
+		return err
+	}
+	claudePool := broker.NewClaudePool()
+	if err := claudePool.LoadDir(claudeDir); err != nil {
 		return err
 	}
 
@@ -476,6 +608,17 @@ func cmdDisable(args []string, disable bool) error {
 		}
 		queue.Flush()
 		fmt.Printf("key %s disabled=%v\n", target, disable)
+		return nil
+	}
+	if acc, ok := claudePool.Get(target); ok {
+		acc.SetDisabled(disable)
+		stats := acc.Stats()
+		raw, err := json.Marshal(stats)
+		if err == nil {
+			_ = queue.Put(store.BucketClaudeAccounts, "stats:"+target, raw)
+		}
+		queue.Flush()
+		fmt.Printf("claude account %s disabled=%v\n", target, disable)
 		return nil
 	}
 	return fmt.Errorf("not found: %s", target)
@@ -552,6 +695,26 @@ func cmdList(args []string) error {
 	return nil
 }
 
+func cmdListClaude(args []string) error {
+	cfg, err := LoadConfig(parseConfigPath(args))
+	if err != nil {
+		return err
+	}
+	claudeDir := cfg.PoolSubdir("claude")
+	names, err := cmd.ListAccounts(claudeDir)
+	if err != nil {
+		return err
+	}
+	if len(names) == 0 {
+		fmt.Println("(no accounts in", claudeDir+")")
+		return nil
+	}
+	for _, n := range names {
+		fmt.Println(n)
+	}
+	return nil
+}
+
 func chatgptBaseHost(fullURL string) string {
 	const defaultBase = "https://chatgpt.com"
 	idx := strings.Index(fullURL, "/backend-api/")
@@ -607,5 +770,19 @@ func loadKeyStats(st *store.Store, pool *broker.APIKeyPool) {
 			continue
 		}
 		k.ApplyStats(s)
+	}
+}
+
+func loadClaudeStats(st *store.Store, pool *broker.ClaudePool) {
+	for _, acc := range pool.List() {
+		raw, err := st.Get(store.BucketClaudeAccounts, "stats:"+acc.Email)
+		if err != nil {
+			continue
+		}
+		var s broker.ClaudeAccountStats
+		if err := json.Unmarshal(raw, &s); err != nil {
+			continue
+		}
+		acc.ApplyStats(s)
 	}
 }

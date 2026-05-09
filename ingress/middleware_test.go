@@ -1,6 +1,8 @@
 package ingress
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/tidwall/gjson"
@@ -25,6 +27,49 @@ func TestAdaptMissingInstructionsBecomesEmptyString(t *testing.T) {
 	}
 	if input[0].Get("role").String() != "developer" {
 		t.Errorf("developer message must remain in input array, got role=%q", input[0].Get("role").String())
+	}
+}
+
+func TestRequireProxyTokenAcceptsXAPIKey(t *testing.T) {
+	called := false
+	h := RequireProxyToken("proxy-token", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	req.Header.Set("x-api-key", "proxy-token")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent || !called {
+		t.Fatalf("status=%d called=%v", rr.Code, called)
+	}
+}
+
+func TestRequireProxyTokenOrAcceptsAllowedBearer(t *testing.T) {
+	called := false
+	h := RequireProxyTokenOr("proxy-token", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}), func(token string) bool { return token == "claude-token" })
+	req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	req.Header.Set("Authorization", "Bearer claude-token")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent || !called {
+		t.Fatalf("status=%d called=%v", rr.Code, called)
+	}
+}
+
+func TestRequireProxyTokenOrRejectsUnknownBearer(t *testing.T) {
+	h := RequireProxyTokenOr("proxy-token", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}), func(token string) bool { return token == "claude-token" })
+	req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	req.Header.Set("Authorization", "Bearer other-token")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d, want %d", rr.Code, http.StatusUnauthorized)
 	}
 }
 

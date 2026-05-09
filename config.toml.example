@@ -20,6 +20,7 @@ pool_dir = "./pool"
 
 [routing]
 # "account-first" tries OAuth accounts before API keys. "apikey-first" inverts.
+# Applies to /v1/responses (ChatGPT/OpenAI) and /v1/messages (Claude/Anthropic).
 priority = "account-first"
 
 # Tier scoring multipliers and bonuses (used by Phase 2 selection algorithm).

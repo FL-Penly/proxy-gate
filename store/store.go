@@ -9,14 +9,15 @@ import (
 )
 
 const (
-	BucketAccounts = "accounts"
-	BucketAPIKeys  = "apikeys"
-	BucketUsage    = "usage"
-	BucketSettings = "settings"
-	BucketPins     = "pins"
+	BucketAccounts       = "accounts"
+	BucketClaudeAccounts = "claude_accounts"
+	BucketAPIKeys        = "apikeys"
+	BucketUsage          = "usage"
+	BucketSettings       = "settings"
+	BucketPins           = "pins"
 )
 
-var allBuckets = []string{BucketAccounts, BucketAPIKeys, BucketUsage, BucketSettings, BucketPins}
+var allBuckets = []string{BucketAccounts, BucketClaudeAccounts, BucketAPIKeys, BucketUsage, BucketSettings, BucketPins}
 
 var ErrNotFound = errors.New("store: not found")
 

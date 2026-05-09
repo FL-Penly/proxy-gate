@@ -47,3 +47,7 @@ func (s *Service) Refresh(ctx context.Context) error {
 func (s *Service) Misses() map[string]int64 {
 	return s.Source.Misses()
 }
+
+func (s *Service) CalculateTokens(input, cached, output int64, model, tier string) (float64, bool) {
+	return s.Source.CalculateTokens(input, cached, output, model, tier)
+}

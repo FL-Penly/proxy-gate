@@ -49,8 +49,8 @@ func TestLookupCodexAlias(t *testing.T) {
 
 func TestLookupAliasOnlyWhenDirectMissing(t *testing.T) {
 	models := map[string]CompactPrice{
-		"gpt-5":         {InputCost: 1e-6, OutputCost: 5e-6},
-		"gpt-5-codex":   {InputCost: 2e-6, OutputCost: 8e-6, CacheReadCost: 1e-7},
+		"gpt-5":       {InputCost: 1e-6, OutputCost: 5e-6},
+		"gpt-5-codex": {InputCost: 2e-6, OutputCost: 8e-6, CacheReadCost: 1e-7},
 	}
 	src := NewSource(&Snapshot{Models: models, Origin: OriginEmbedded})
 	p, ok := src.Lookup("gpt-5-codex")
@@ -73,6 +73,33 @@ func TestLookupOpenAIPrefixStrip(t *testing.T) {
 	}
 	if p.InputCost != 2.5e-6 {
 		t.Errorf("wrong entry: %+v", p)
+	}
+}
+
+func TestLookupAnthropicPrefixStrip(t *testing.T) {
+	models := map[string]CompactPrice{
+		"claude-sonnet-4-6": {InputCost: 3e-6, OutputCost: 15e-6},
+	}
+	src := NewSource(&Snapshot{Models: models, Origin: OriginEmbedded})
+	p, ok := src.Lookup("anthropic/claude-sonnet-4-6")
+	if !ok {
+		t.Fatal("anthropic/ prefix should be stripped to find claude model")
+	}
+	if p.InputCost != 3e-6 {
+		t.Errorf("wrong entry: %+v", p)
+	}
+}
+
+func TestLookupClaudeFallbackPrices(t *testing.T) {
+	src := NewSource(&Snapshot{Models: map[string]CompactPrice{}, Origin: OriginEmbedded})
+	for _, model := range []string{"claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-7"} {
+		p, ok := src.Lookup(model)
+		if !ok {
+			t.Fatalf("%s should use fallback price", model)
+		}
+		if p.InputCost == 0 || p.OutputCost == 0 {
+			t.Fatalf("%s fallback price is incomplete: %+v", model, p)
+		}
 	}
 }
 

@@ -138,6 +138,10 @@ func RequireAdmin(token string, h http.HandlerFunc) http.HandlerFunc {
 }
 
 func RequireProxyToken(token string, h http.Handler) http.Handler {
+	return RequireProxyTokenOr(token, h, nil)
+}
+
+func RequireProxyTokenOr(token string, h http.Handler, allow func(string) bool) http.Handler {
 	if token == "" {
 		return h
 	}
@@ -147,7 +151,10 @@ func RequireProxyToken(token string, h http.Handler) http.Handler {
 		if got == "" {
 			got = r.Header.Get("X-ProxyGate-Token")
 		}
-		if subtle.ConstantTimeCompare([]byte(got), expected) != 1 {
+		if got == "" {
+			got = r.Header.Get("x-api-key")
+		}
+		if subtle.ConstantTimeCompare([]byte(got), expected) != 1 && (allow == nil || !allow(got)) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}

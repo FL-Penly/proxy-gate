@@ -27,6 +27,13 @@ main{padding:18px 24px;max-width:1400px;margin:0 auto}
 .summary .val{font-family:var(--mono);font-size:14px}
 .summary .sep{flex:1}
 
+.tabs{display:flex;gap:6px;margin:0 0 16px;border-bottom:1px solid var(--border)}
+.tab{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--mute);padding:8px 12px;margin-bottom:-1px;cursor:pointer;font-family:var(--mono);font-size:12px}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab .count{color:var(--dim);margin-left:4px}
+.tab.active .count{color:#79c0ff}
+
 .section{margin-bottom:22px}
 .section .head{display:flex;align-items:center;justify-content:space-between;margin:0 0 8px}
 .section h2{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mute);margin:0;font-weight:600}
@@ -36,6 +43,7 @@ main{padding:18px 24px;max-width:1400px;margin:0 auto}
 .add-status{font-size:11px;color:var(--mute);font-family:var(--mono);margin-bottom:6px;padding:6px 10px;background:var(--panel);border:1px solid var(--border);border-radius:4px}
 .add-status.ok{color:var(--ok)}
 .add-status.err{color:var(--bad)}
+.info-banner{font-size:11px;color:var(--mute);font-family:var(--mono);margin-bottom:6px;padding:6px 10px;background:var(--panel);border:1px solid var(--border);border-radius:4px}
 
 .term{background:var(--panel);border:1px solid var(--border);border-radius:6px;font-family:var(--mono);font-size:12px;overflow:hidden}
 .term .row{display:grid;grid-template-columns:14px 240px 50px 180px 1fr 1fr 76px 180px 130px;gap:14px;padding:7px 14px;align-items:center;border-bottom:1px solid var(--border);min-height:32px}
@@ -44,6 +52,7 @@ main{padding:18px 24px;max-width:1400px;margin:0 auto}
 .term .row.head{background:var(--panel2);color:var(--mute);font-size:10px;text-transform:uppercase;letter-spacing:.5px;min-height:auto}
 .term .row.head:hover{background:var(--panel2)}
 .term .row.k{grid-template-columns:14px 1fr 90px 90px 100px 200px 130px}
+.term .row.c{grid-template-columns:14px 240px 80px 180px 1fr 1fr 76px 180px 130px}
 
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%}
 .dot.ok{background:var(--ok)}
@@ -78,6 +87,13 @@ main{padding:18px 24px;max-width:1400px;margin:0 auto}
 .age.stale{color:var(--bad)}
 .today{color:var(--text);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .today.muted{color:var(--dim)}
+.usageBox{display:flex;flex-direction:column;gap:4px;min-width:0}
+.usageLine{color:var(--text);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.usageLine.muted{color:var(--dim)}
+.usageBar{height:6px;background:var(--panel2);border:1px solid var(--border);border-radius:999px;overflow:hidden;display:flex;max-width:190px}
+.usageBar .in{height:100%;background:#58a6ffcc}
+.usageBar .out{height:100%;background:#a371f7cc}
+.usageHint{color:var(--dim);font-size:10px;white-space:nowrap}
 .cost{font-family:var(--mono);font-size:11px;color:var(--text);white-space:nowrap}
 .cost.zero{color:var(--dim)}
 .cost.unpriced{color:var(--warn)}
@@ -96,6 +112,21 @@ main{padding:18px 24px;max-width:1400px;margin:0 auto}
 
 .empty{padding:20px;text-align:center;color:var(--mute);background:var(--panel);border:1px dashed var(--border);border-radius:6px}
 
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:flex;align-items:center;justify-content:center}
+.modal{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:24px;width:520px;max-width:90vw;max-height:80vh;overflow:auto}
+.modal h3{margin:0 0 6px;font-size:14px}
+.modal p{color:var(--mute);font-size:11px;margin:0 0 12px}
+.modal textarea{width:100%;min-height:180px;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:10px;font-family:var(--mono);font-size:12px;resize:vertical}
+.modal textarea:focus{outline:none;border-color:var(--accent)}
+.modal .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.modal .modal-actions button{padding:6px 16px;border-radius:5px;cursor:pointer;font-size:12px;font-family:var(--mono)}
+.modal .btn-primary{background:var(--accent);color:#fff;border:none}
+.modal .btn-primary:hover{filter:brightness(1.1)}
+.modal .btn-primary:disabled{opacity:.5;cursor:wait}
+.modal .btn-cancel{background:transparent;border:1px solid var(--border);color:var(--text)}
+.modal .btn-cancel:hover{background:var(--panel2)}
+.modal .modal-err{color:var(--bad);font-size:11px;margin-top:8px;min-height:1em;font-family:var(--mono)}
+
 #login{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column}
 #login .box{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:32px;width:380px}
 #login h1{margin:0 0 6px;font-size:18px}
@@ -109,6 +140,9 @@ main{padding:18px 24px;max-width:1400px;margin:0 auto}
 
 @media(max-width:1100px){
   .term .row{grid-template-columns:14px 200px 50px 160px 1fr 1fr 70px 130px}
+  .term .row.k{grid-template-columns:14px 1fr 90px 90px 100px 200px}
+  .term .row.c{grid-template-columns:14px 1fr 80px 120px 1fr 1fr 70px 130px}
+  .term .row.c > :nth-child(8){display:none}
   .term .row > :nth-last-child(1){display:none}
 }
 </style>
@@ -135,6 +169,7 @@ main{padding:18px 24px;max-width:1400px;margin:0 auto}
 <main>
 <div class="summary">
   <div class="it"><span class="lbl">Accts</span><span class="val" id="sAcc">-</span></div>
+  <div class="it"><span class="lbl">Claude</span><span class="val" id="sClaude">-</span></div>
   <div class="it"><span class="lbl">Keys</span><span class="val" id="sKey">-</span></div>
   <div class="it"><span class="lbl">Today in</span><span class="val" id="sIn">-</span></div>
   <div class="it"><span class="lbl">Today out</span><span class="val" id="sOut">-</span></div>
@@ -145,18 +180,53 @@ main{padding:18px 24px;max-width:1400px;margin:0 auto}
 </div>
 <div id="unpricedBanner" class="hidden" style="background:#f8514922;border:1px solid var(--bad);color:var(--bad);padding:8px 12px;border-radius:6px;margin-bottom:14px;font-family:var(--mono);font-size:11px"></div>
 
-<div class="section">
-  <div class="head">
-    <h2>OAuth accounts <span class="subtotal" id="accSubtotal"></span></h2>
-    <button class="add" id="addAccount">+ Add account</button>
-  </div>
-  <div class="add-status hidden" id="addStatus"></div>
-  <div id="accList"></div>
+<div class="tabs">
+  <button class="tab active" data-tab="openai">OpenAI<span class="count" id="tabOpenAI">-</span></button>
+  <button class="tab" data-tab="claude">Claude<span class="count" id="tabClaude">-</span></button>
+  <button class="tab" data-tab="keys">API Keys<span class="count" id="tabKeys">-</span></button>
 </div>
 
-<div class="section">
-  <div class="head"><h2>API keys <span class="subtotal" id="keySubtotal"></span></h2></div>
-  <div id="keyList"></div>
+<div id="openaiPane" class="tab-pane">
+  <div class="section">
+    <div class="head">
+      <h2>OpenAI OAuth accounts <span class="subtotal" id="accSubtotal"></span></h2>
+      <button class="add" id="addAccount">+ Add account</button>
+    </div>
+    <div class="add-status hidden" id="addStatus"></div>
+    <div id="accList"></div>
+  </div>
+</div>
+
+<div id="claudePane" class="tab-pane hidden">
+  <div class="section">
+    <div class="head">
+      <h2>Claude OAuth accounts <span class="subtotal" id="claudeSubtotal"></span></h2>
+      <button class="add" id="addClaude">+ Add Claude account</button>
+    </div>
+    <div class="add-status hidden" id="claudeAddStatus"></div>
+    <div class="info-banner">OAuth login opens Claude in a new tab. Primary/Secondary are best-effort Claude OAuth usage windows: 5h and 7d. If browser OAuth fails, use <button class="btn" id="importClaudeJSON">Import JSON</button>.</div>
+    <div id="claudeList"></div>
+  </div>
+</div>
+
+<div id="claudeModal" class="modal-overlay hidden">
+<div class="modal">
+  <h3>Add Claude Account</h3>
+  <p>Paste Claude credentials JSON below. Supports native format or Claude Code <code>.credentials.json</code>.</p>
+  <textarea id="claudeJSON" placeholder='{"email":"...","access_token":"...","refresh_token":"..."}'></textarea>
+  <div class="modal-err" id="claudeModalErr"></div>
+  <div class="modal-actions">
+    <button class="btn-cancel" id="claudeModalCancel">Cancel</button>
+    <button class="btn-primary" id="claudeModalImport">Import</button>
+  </div>
+</div>
+</div>
+
+<div id="keysPane" class="tab-pane hidden">
+  <div class="section">
+    <div class="head"><h2>API keys <span class="subtotal" id="keySubtotal"></span></h2></div>
+    <div id="keyList"></div>
+  </div>
 </div>
 <div id="priceFooter" class="priceFooter"></div>
 </main>
@@ -225,6 +295,19 @@ $('logout').onclick = async () => {
 };
 
 $('refreshAll').onclick = load;
+
+let activeTab = localStorage.getItem('proxygate_tab') || 'openai';
+function setTab(name) {
+  if (!['openai','claude','keys'].includes(name)) name = 'openai';
+  activeTab = name;
+  localStorage.setItem('proxygate_tab', name);
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  $('openaiPane').classList.toggle('hidden', name !== 'openai');
+  $('claudePane').classList.toggle('hidden', name !== 'claude');
+  $('keysPane').classList.toggle('hidden', name !== 'keys');
+}
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => setTab(t.dataset.tab));
+setTab(activeTab);
 
 let watchTimer = null;
 $('addAccount').onclick = async () => {
@@ -325,12 +408,12 @@ function renderAccount(a, today, costRow) {
   const p = a.primary_used_pct || 0, s = a.secondary_used_pct || 0;
   const ageSec = a.wham_age_seconds || 0;
   const stale = ageSec >= 600;
-  const ageTxt = a.last_wham_at ? fmtAge(ageSec) : 'never';
+  const ageTxt = a.last_wham_at ? fmtRelative(a.last_wham_at) : 'never';
   const t = today || {};
   const cost = (costRow && costRow.total_cost) || 0;
   const unpriced = (costRow && costRow.unpriced) || 0;
-  const costClass = cost === 0 ? 'cost zero' : (unpriced > 0 ? 'cost unpriced' : 'cost');
-  const costLabel = cost > 0 ? fmtUSD(cost) : '-';
+  const costClass = unpriced > 0 ? 'cost unpriced' : (cost === 0 ? 'cost zero' : 'cost');
+  const costLabel = unpriced > 0 ? 'unpriced' : (cost > 0 ? fmtUSD(cost) : '-');
   const todayTxt = (t.requests || t.input_tokens)
     ? `<span class="today">${fmtNum(t.requests)}r · ${fmtNum(t.input_tokens)}/${fmtNum(t.output_tokens)} · <span class="${costClass}" title="equivalent API price for this subscription's traffic">${costLabel}</span></span>`
     : `<span class="today muted">idle</span>`;
@@ -362,8 +445,8 @@ function renderKey(k, costRow) {
   const dot = k.dead ? 'bad' : k.disabled ? 'dim' : k.cooldown_until ? 'warn' : 'ok';
   const cost = (costRow && costRow.total_cost) || 0;
   const unpriced = (costRow && costRow.unpriced) || 0;
-  const costClass = cost === 0 ? 'cost zero' : (unpriced > 0 ? 'cost unpriced' : 'cost');
-  const costLabel = cost > 0 ? fmtUSD(cost) : '-';
+  const costClass = unpriced > 0 ? 'cost unpriced' : (cost === 0 ? 'cost zero' : 'cost');
+  const costLabel = unpriced > 0 ? 'unpriced' : (cost > 0 ? fmtUSD(cost) : '-');
   return `<div class="row k" data-id="${esc(k.id)}">
     <span class="dot ${dot}"></span>
     <span class="em">${esc(k.name||k.id)}<span class="id">${esc(k.id)}</span></span>
@@ -380,6 +463,91 @@ function renderKey(k, costRow) {
   </div>`;
 }
 
+function claudeDotClass(a) {
+  if (a.dead) return 'bad';
+  if (a.disabled) return 'dim';
+  if (a.cooldown_until || (a.refresh_fail_count||0) > 0 || (a.usage_fail_count||0) > 0) return 'warn';
+  if ((a.primary_used_pct||0) >= 0.995) return 'bad';
+  return 'ok';
+}
+
+function claudeStatusCell(a) {
+  if (a.dead) return `<span class="stat-text bad">DEAD${a.dead_reason ? ' · '+esc(a.dead_reason.slice(0,40)) : ''}</span>`;
+  if (a.disabled) return `<span class="stat-text dim">disabled</span>`;
+  if (a.cooldown_until) return `<span class="stat-text cd"><span class="chip cd">CD</span>${fmtCooldown(a.cooldown_until)}</span>`;
+  if (a.refresh_fail_count) return `<span class="stat-text cd" title="${esc(a.last_refresh_err||'')}"><span class="chip warn">REFRESH ERR</span>${a.refresh_fail_count}</span>`;
+  return `<span class="stat-text ok">active</span>`;
+}
+
+function titleCaseWords(s) {
+  return String(s||'').split(/[_\s-]+/).filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+function claudePlanLabel(a) {
+  const rawPlan = String(a.subscription_type || '').trim();
+  const tier = String(a.rate_limit_tier || '').toLowerCase();
+  const raw = (rawPlan || tier).toLowerCase();
+  if (raw.includes('max_20x') || raw.includes('max-20x')) return 'Max 20x';
+  if (raw.includes('max_5x') || raw.includes('max-5x')) return 'Max 5x';
+  if (raw.includes('claude_max') || raw.includes('max')) return 'Max';
+  if (raw.includes('claude_pro') || raw.includes('pro')) return 'Pro';
+  if (raw.includes('team')) return 'Team';
+  if (raw.includes('enterprise')) return 'Enterprise';
+  return rawPlan ? titleCaseWords(rawPlan.replace(/^claude[_-]/, '')) : 'Unknown';
+}
+
+function claudeTierLabel(tier) {
+  const raw = String(tier || '').trim();
+  if (!raw) return '—';
+  return raw.replace(/^default_claude_?/, 'default ').replace(/^claude_?/, '').replace(/_/g, ' ');
+}
+
+function renderUsageBox(t, costClass, costLabel) {
+  const input = Number(t.input_tokens || 0), output = Number(t.output_tokens || 0), reqs = Number(t.requests || 0);
+  if (!reqs && !input && !output) return `<div class="usageBox"><span class="usageLine muted">idle</span><span class="usageHint">no traffic today</span></div>`;
+  const total = Math.max(1, input + output);
+  const inPct = Math.max(2, Math.round(input * 100 / total));
+  const outPct = Math.max(2, 100 - inPct);
+  return `<div class="usageBox" title="Today usage. Claude OAuth does not expose a true quota-remaining API, so this bar visualizes today's input/output token mix, not remaining subscription quota.">
+    <span class="usageLine">${fmtNum(reqs)}r · ${fmtNum(input)}/${fmtNum(output)} · <span class="${costClass}">${costLabel}</span></span>
+    <span class="usageBar"><span class="in" style="width:${inPct}%"></span><span class="out" style="width:${outPct}%"></span></span>
+  </div>`;
+}
+
+function renderClaudeAccount(a, today, costRow) {
+  const p = a.primary_used_pct || 0, s = a.secondary_used_pct || 0;
+  const ageSec = a.last_usage_at ? Math.floor((Date.now() - new Date(a.last_usage_at).getTime()) / 1000) : 0;
+  const stale = !a.last_usage_at || ageSec >= 600 || (a.usage_fail_count||0) > 0;
+  const ageTxt = a.last_usage_at ? fmtRelative(a.last_usage_at) : 'never';
+  const t = today || {};
+  const cost = (costRow && costRow.total_cost) || 0;
+  const unpriced = (costRow && costRow.unpriced) || 0;
+  const costClass = unpriced > 0 ? 'cost unpriced' : (cost === 0 ? 'cost zero' : 'cost');
+  const costLabel = unpriced > 0 ? 'unpriced' : (cost > 0 ? fmtUSD(cost) : '-');
+  const plan = claudePlanLabel(a);
+  const todayTxt = (t.requests || t.input_tokens)
+    ? `<span class="today">${fmtNum(t.requests)}r · ${fmtNum(t.input_tokens)}/${fmtNum(t.output_tokens)} · <span class="${costClass}" title="equivalent API price for this subscription's traffic">${costLabel}</span></span>`
+    : `<span class="today muted">idle</span>`;
+  const bar = (p,r,sym) => `<div class="pmeter ${barClass(p)}"><span class="label">${sym}</span><span class="track"><span class="fill" style="width:${Math.min(100,p*100).toFixed(0)}%"></span></span><span class="pct">${fmtPct(p)}</span><span class="reset">${esc(r)}</span></div>`;
+  return `<div class="row c" data-email="${esc(a.email)}">
+    <span class="dot ${claudeDotClass(a)}"></span>
+    <span class="em">${esc(a.email)}${a.account_id ? `<span class="id">${esc(a.account_id)}</span>` : ''}</span>
+    <span><span class="chip plan" title="raw subscription_type: ${esc(a.subscription_type||'')} · raw tier: ${esc(a.rate_limit_tier||'')}">${esc(plan)}</span></span>
+    <span>${claudeStatusCell(a)}</span>
+    ${bar(p, fmtResetIn(a.primary_reset_at), 'P')}
+    ${bar(s, fmtResetIn(a.secondary_reset_at), 'S')}
+    <span class="age ${stale ? 'stale' : ''}" title="${esc(a.last_usage_err||a.last_refresh_err||'')}">${stale ? '⚠ ' : ''}${ageTxt}</span>
+    ${todayTxt}
+    <span class="actions">
+      ${a.disabled
+        ? `<button class="btn" data-act="enable">Enable</button>`
+        : `<button class="btn" data-act="disable">Disable</button>`}
+      <button class="btn" data-act="refresh" title="Refresh OAuth token">↻</button>
+      <button class="btn danger" data-act="delete" title="Remove">×</button>
+    </span>
+  </div>`;
+}
+
 const accHead = `<div class="row head">
   <span></span><span>Email</span><span>Plan</span><span>Status</span>
   <span>Primary (5h)</span><span>Secondary (weekly)</span>
@@ -387,8 +555,14 @@ const accHead = `<div class="row head">
 </div>`;
 
 const keyHead = `<div class="row head k">
-  <span></span><span>Name</span><span>Type</span><span>Status</span>
+  <span></span><span>Name</span><span>Provider</span><span>Status</span>
   <span>Requests</span><span>In / Out</span><span style="text-align:right">Actions</span>
+</div>`;
+
+const claudeHead = `<div class="row head c">
+  <span></span><span>Email</span><span>Plan</span><span>Status</span>
+  <span>Primary (5h)</span><span>Secondary (weekly)</span>
+  <span>Polled</span><span>Today</span><span style="text-align:right">Actions</span>
 </div>`;
 
 async function load() {
@@ -396,8 +570,9 @@ async function load() {
   $('addr').textContent = host;
   $('sAddr').textContent = host;
   try {
-    const [accs, keys, usage, cost, priceStatus, unpriced] = await Promise.all([
+    const [accs, claudeAccs, keys, usage, cost, priceStatus, unpriced] = await Promise.all([
       api('/admin/accounts'),
+      api('/admin/claude-accounts').catch(()=>[]),
       api('/admin/keys').catch(()=>[]),
       api('/admin/usage').catch(()=>({today:{}})),
       api('/admin/usage/cost').catch(()=>({by_account:[], by_key:[], real_cost:0, equivalent_cost:0})),
@@ -405,17 +580,29 @@ async function load() {
       api('/admin/pricing/unpriced').catch(()=>[]),
     ]);
     const healthy = accs.filter(a => !a.dead && !a.disabled && !a.cooldown_until).length;
+    const healthyClaude = claudeAccs.filter(a => !a.dead && !a.disabled && !a.cooldown_until).length;
     $('sAcc').textContent = `${accs.length} (${healthy} healthy)`;
+    $('sClaude').textContent = `${claudeAccs.length} (${healthyClaude} healthy)`;
     $('sKey').textContent = keys.length;
+    $('tabOpenAI').textContent = `${accs.length}`;
+    $('tabClaude').textContent = `${claudeAccs.length}`;
+    $('tabKeys').textContent = `${keys.length}`;
     const today = (usage && usage.today) || {};
     $('sIn').textContent = fmtNum(today.input_tokens);
     $('sOut').textContent = fmtNum(today.output_tokens);
     $('sReal').textContent = fmtUSD(cost.real_cost);
     $('sEquiv').textContent = fmtUSD(cost.equivalent_cost);
 
-    const accReqs = (cost.by_account||[]).reduce((s,r) => s + (r.requests||0), 0);
+    const accountRows = cost.by_account || [];
+    const openAIRows = accountRows.filter(r => !String(r.id||'').startsWith('claude:'));
+    const claudeRows = accountRows.filter(r => String(r.id||'').startsWith('claude:'));
+    const openAIEquiv = openAIRows.reduce((s,r) => s + (r.total_cost||0), 0);
+    const claudeEquiv = claudeRows.reduce((s,r) => s + (r.total_cost||0), 0);
+    const accReqs = openAIRows.reduce((s,r) => s + (r.requests||0), 0);
+    const claudeReqs = claudeRows.reduce((s,r) => s + (r.requests||0), 0);
     const keyReqs = (cost.by_key||[]).reduce((s,r) => s + (r.requests||0), 0);
-    $('accSubtotal').innerHTML = `<span class="tag">today equiv</span> ${fmtUSD(cost.equivalent_cost)} <span class="tag">·</span> ${fmtNum(accReqs)} reqs`;
+    $('accSubtotal').innerHTML = `<span class="tag">today equiv</span> ${fmtUSD(openAIEquiv)} <span class="tag">·</span> ${fmtNum(accReqs)} reqs`;
+    $('claudeSubtotal').innerHTML = `<span class="tag">today equiv</span> ${fmtUSD(claudeEquiv)} <span class="tag">·</span> ${fmtNum(claudeReqs)} reqs`;
     $('keySubtotal').innerHTML = `<span class="tag">today real</span> ${fmtUSD(cost.real_cost)} <span class="tag">·</span> ${fmtNum(keyReqs)} reqs`;
 
     const banner = $('unpricedBanner');
@@ -427,16 +614,24 @@ async function load() {
     }
 
     const accCostMap = {};
-    (cost.by_account||[]).forEach(r => accCostMap[r.id] = r);
+    openAIRows.forEach(r => accCostMap[r.id] = r);
+    const claudeCostMap = {};
+    claudeRows.forEach(r => claudeCostMap[String(r.id||'').replace(/^claude:/, '')] = r);
     const keyCostMap = {};
     (cost.by_key||[]).forEach(r => keyCostMap[r.id] = r);
 
     const byAccount = (usage && usage.by_account) || {};
     const aList = $('accList');
     aList.innerHTML = accs.length
-      ? `<div class="term">${accHead}${accs.map(a => renderAccount(a, byAccount[a.email], accCostMap[a.email])).join('')}</div>${renderByModel(cost.by_account, 'equivalent')}`
+      ? `<div class="term">${accHead}${accs.map(a => renderAccount(a, byAccount[a.email], accCostMap[a.email])).join('')}</div>${renderByModel(openAIRows, 'equivalent')}`
       : '<div class="empty">No accounts</div>';
     aList.querySelectorAll('button[data-act]').forEach(btn => btn.onclick = onAccAction);
+
+    const cList = $('claudeList');
+    cList.innerHTML = claudeAccs.length
+      ? `<div class="term">${claudeHead}${claudeAccs.map(a => renderClaudeAccount(a, byAccount['claude:'+a.email], claudeCostMap[a.email])).join('')}</div>${renderByModel(claudeRows, 'equivalent')}`
+      : '<div class="empty">No Claude accounts</div>';
+    cList.querySelectorAll('button[data-act]').forEach(btn => btn.onclick = onClaudeAction);
 
     const kList = $('keyList');
     kList.innerHTML = keys.length
@@ -460,15 +655,16 @@ function renderByModel(rows, kind) {
   rows.forEach(r => {
     (r.by_model||[]).forEach(m => {
       const k = m.model + (m.service_tier ? '@'+m.service_tier : '');
-      if (!tally[k]) tally[k] = {model: m.model, tier: m.service_tier, cost: 0, requests: 0};
+      if (!tally[k]) tally[k] = {model: m.model, tier: m.service_tier, cost: 0, requests: 0, unpriced: 0};
       tally[k].cost += m.total_cost || 0;
       tally[k].requests += m.requests || 0;
+      tally[k].unpriced += m.unpriced || 0;
     });
   });
   const items = Object.values(tally).sort((a,b) => b.cost - a.cost);
   if (!items.length) return '';
   const label = kind === 'equivalent' ? 'equivalent' : 'real';
-  return `<div class="bymodel">today by model (${label}): ${items.map(i => `<span class="m"><b>${esc(i.model)}${i.tier ? '@'+esc(i.tier) : ''}</b> ${fmtUSD(i.cost)} (${fmtNum(i.requests)})</span>`).join('')}</div>`;
+  return `<div class="bymodel">today by model (${label}): ${items.map(i => `<span class="m"><b>${esc(i.model)}${i.tier ? '@'+esc(i.tier) : ''}</b> ${i.unpriced ? '<span class="cost unpriced">unpriced</span>' : fmtUSD(i.cost)} (${fmtNum(i.requests)})</span>`).join('')}</div>`;
 }
 
 async function onAccAction(e) {
@@ -505,6 +701,98 @@ async function onKeyAction(e) {
   } catch(err) { alert(err.message); }
   finally { e.target.disabled = false; }
 }
+
+async function onClaudeAction(e) {
+  const row = e.target.closest('.row');
+  const email = row.dataset.email;
+  const act = e.target.dataset.act;
+  e.target.disabled = true;
+  try {
+    if (act === 'disable') await api(`/admin/claude-accounts/${encodeURIComponent(email)}/disable`, {method:'POST'});
+    else if (act === 'enable') await api(`/admin/claude-accounts/${encodeURIComponent(email)}/enable`, {method:'POST'});
+    else if (act === 'refresh') await api(`/admin/claude-accounts/${encodeURIComponent(email)}/refresh`, {method:'POST'});
+    else if (act === 'delete') {
+      if (!confirm(`Remove Claude account ${email}?`)) return;
+      await api(`/admin/claude-accounts/${encodeURIComponent(email)}`, {method:'DELETE'});
+    }
+    load();
+  } catch(err) { alert(err.message); }
+  finally { e.target.disabled = false; }
+}
+
+$('addClaude').onclick = async () => {
+  const btn = $('addClaude'), st = $('claudeAddStatus');
+  btn.disabled = true;
+  st.classList.remove('hidden','ok','err');
+  st.textContent = 'opening Claude OAuth in new tab…';
+  try {
+    const baseline = (await api('/admin/claude-accounts')).map(a => a.email).sort().join(',');
+    const r = await api('/admin/ui/claude-oauth-start', {method:'POST'});
+    if (!r.auth_url) throw new Error('no auth_url');
+    const w = window.open(r.auth_url, '_blank');
+    if (!w) throw new Error('popup blocked — allow popups for this site');
+    st.textContent = 'waiting for Claude OAuth completion (poll every 3s, max 5 min)…';
+    let elapsed = 0;
+    const timer = setInterval(async () => {
+      elapsed += 3;
+      try {
+        const accs = await api('/admin/claude-accounts');
+        const cur = accs.map(a => a.email).sort().join(',');
+        if (cur !== baseline) {
+          clearInterval(timer);
+          st.classList.add('ok'); st.textContent = `Claude account added (${accs.length} total)`;
+          btn.disabled = false;
+          load();
+          setTimeout(() => st.classList.add('hidden'), 5000);
+          return;
+        }
+      } catch {}
+      if (elapsed >= 300) {
+        clearInterval(timer);
+        st.classList.add('err'); st.textContent = 'Claude OAuth not completed within 5 min — use Import JSON fallback';
+        btn.disabled = false;
+      }
+    }, 3000);
+  } catch (e) {
+    st.classList.add('err'); st.textContent = String(e.message || e);
+    btn.disabled = false;
+  }
+};
+
+$('importClaudeJSON').onclick = () => {
+  $('claudeJSON').value = '';
+  $('claudeModalErr').textContent = '';
+  $('claudeModal').classList.remove('hidden');
+  $('claudeJSON').focus();
+};
+$('claudeModalCancel').onclick = () => $('claudeModal').classList.add('hidden');
+$('claudeModal').onclick = (e) => { if (e.target === $('claudeModal')) $('claudeModal').classList.add('hidden'); };
+$('claudeModalImport').onclick = async () => {
+  const raw = $('claudeJSON').value.trim();
+  if (!raw) { $('claudeModalErr').textContent = 'Paste JSON first'; return; }
+  try { JSON.parse(raw); } catch { $('claudeModalErr').textContent = 'Invalid JSON'; return; }
+  const btn = $('claudeModalImport');
+  btn.disabled = true;
+  $('claudeModalErr').textContent = '';
+  try {
+    const r = await api('/admin/claude-accounts/import', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: raw,
+    });
+    $('claudeModal').classList.add('hidden');
+    const st = $('claudeAddStatus');
+    st.classList.remove('hidden','err');
+    st.classList.add('ok');
+    st.textContent = `imported ${r.email}`;
+    setTimeout(() => st.classList.add('hidden'), 5000);
+    load();
+  } catch (e) {
+    const msg = e.message || String(e);
+    try { const j = JSON.parse(msg); $('claudeModalErr').textContent = j.error || msg; }
+    catch { $('claudeModalErr').textContent = msg; }
+  } finally { btn.disabled = false; }
+};
 
 setInterval(() => { if (!$('app').classList.contains('hidden')) load(); }, 30000);
 tryEnter();

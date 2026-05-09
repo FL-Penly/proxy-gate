@@ -23,12 +23,17 @@ const (
 	OpenAIAuthURL          = "https://auth.openai.com/oauth/authorize"
 	OpenAITokenURL         = "https://auth.openai.com/oauth/token"
 	OpenAICallbackPath     = "/auth/callback"
+	ClaudeClientID         = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+	ClaudeAuthURL          = "https://claude.ai/oauth/authorize"
+	ClaudeCallbackPath     = "/callback"
 	defaultCallbackTimeout = 2 * time.Minute
 )
 
 var OpenAICallbackPorts = []int{1455, 1456, 1457, 1458, 1459, 1460}
+var ClaudeCallbackPorts = []int{1461, 1462, 1463, 1464, 1465, 1466}
 
 var OpenAIScopes = []string{"openid", "profile", "email", "offline_access"}
+var ClaudeScopes = []string{"org:create_api_key", "user:profile", "user:inference", "user:sessions:claude_code", "user:file_upload"}
 
 type PKCE struct {
 	Verifier  string
@@ -99,6 +104,19 @@ func OpenAIAuthorizeURL(redirectURI, challenge, state string) string {
 	}.URL()
 }
 
+func ClaudeAuthorizeURL(redirectURI, challenge, state string) string {
+	v := url.Values{}
+	v.Set("code", "true")
+	v.Set("response_type", "code")
+	v.Set("client_id", ClaudeClientID)
+	v.Set("redirect_uri", redirectURI)
+	v.Set("scope", joinSpaces(ClaudeScopes))
+	v.Set("code_challenge", challenge)
+	v.Set("code_challenge_method", "S256")
+	v.Set("state", state)
+	return ClaudeAuthURL + "?" + v.Encode()
+}
+
 type CallbackResult struct {
 	Code  string
 	State string
@@ -119,6 +137,10 @@ type Callback struct {
 
 func StartOpenAICallback(ctx context.Context, expectedState string) (*Callback, error) {
 	return startCallback(ctx, expectedState, OpenAICallbackPath, OpenAICallbackPorts)
+}
+
+func StartClaudeCallback(ctx context.Context, expectedState string) (*Callback, error) {
+	return startCallback(ctx, expectedState, ClaudeCallbackPath, ClaudeCallbackPorts)
 }
 
 func startCallback(ctx context.Context, expectedState, path string, ports []int) (*Callback, error) {

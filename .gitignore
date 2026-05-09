@@ -14,6 +14,7 @@ config.toml
 
 # Pool credentials (sensitive)
 pool/chatgpt/*.json
+pool/claude/*.json
 pool/apikeys/*.json
 
 # IDE / editor

@@ -22,16 +22,49 @@ func newTestAdmin(t *testing.T) (*AdminAPI, *store.Store, *Queue, *http.ServeMux
 	}
 	q := NewQueue(st, WithBatchSize(1), WithMaxWait(time.Millisecond))
 	pool := broker.NewPool(broker.PoolConfig{})
+	claudePool := broker.NewClaudePool()
 	keyPool := broker.NewAPIKeyPool()
 	a := &AdminAPI{
-		Pool:    pool,
-		KeyPool: keyPool,
-		Queue:   q,
-		Token:   "test-token",
+		Pool:       pool,
+		ClaudePool: claudePool,
+		KeyPool:    keyPool,
+		Queue:      q,
+		Token:      "test-token",
 	}
 	mux := http.NewServeMux()
 	a.Mount(mux)
 	return a, st, q, mux
+}
+
+func TestToggleClaudeAccountPersistsDisabled(t *testing.T) {
+	a, st, q, mux := newTestAdmin(t)
+	defer st.Close()
+	defer q.Close()
+
+	acc := &broker.ClaudeAccount{Email: "claude@x.com", AccessToken: "t"}
+	acc.ApplyStats(broker.ClaudeAccountStats{})
+	a.ClaudePool.Add(acc)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/claude-accounts/claude@x.com/disable", nil)
+	req.Header.Set("X-Admin-Token", a.Token)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	q.Flush()
+	raw, err := st.Get(store.BucketClaudeAccounts, "stats:claude@x.com")
+	if err != nil {
+		t.Fatalf("read bucket: %v", err)
+	}
+	var got broker.ClaudeAccountStats
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !got.Disabled {
+		t.Errorf("persisted Disabled=false, want true")
+	}
 }
 
 func TestToggleKeyPersistsDisabled(t *testing.T) {

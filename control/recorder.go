@@ -34,9 +34,10 @@ type BillingDailyUsage struct {
 }
 
 type Recorder struct {
-	store *store.Store
-	queue *Queue
-	pool  *broker.Pool
+	store      *store.Store
+	queue      *Queue
+	pool       *broker.Pool
+	claudePool *broker.ClaudePool
 
 	mu               sync.Mutex
 	day              map[string]*DailyUsage
@@ -44,6 +45,10 @@ type Recorder struct {
 	byKey            map[string]map[string]*DailyUsage
 	byAccountBilling map[string]map[string]*BillingDailyUsage
 	byKeyBilling     map[string]map[string]*BillingDailyUsage
+}
+
+func (r *Recorder) SetClaudePool(p *broker.ClaudePool) {
+	r.claudePool = p
 }
 
 func NewRecorder(s *store.Store, q *Queue, p *broker.Pool) *Recorder {
@@ -73,19 +78,23 @@ func (r *Recorder) RecordRequest(rec ingress.UsageRecord) {
 	bumpDay(d, &rec)
 	snap := *d
 
+	accountUsageID := rec.Account
+	if rec.Provider == "claude-pool" && accountUsageID != "" {
+		accountUsageID = "claude:" + accountUsageID
+	}
 	var perAccountSnap *DailyUsage
 	var perKeySnap *DailyUsage
 	var perAccountBillingSnap *BillingDailyUsage
 	var perKeyBillingSnap *BillingDailyUsage
-	if rec.Account != "" {
-		perAccountSnap = r.bumpSubLocked(r.byAccount, dayKey, rec.Account, "day:"+dayKey+":acc:"+rec.Account, &rec)
+	if accountUsageID != "" {
+		perAccountSnap = r.bumpSubLocked(r.byAccount, dayKey, accountUsageID, "day:"+dayKey+":acc:"+accountUsageID, &rec)
 	}
 	if rec.KeyID != "" {
 		perKeySnap = r.bumpSubLocked(r.byKey, dayKey, rec.KeyID, "day:"+dayKey+":key:"+rec.KeyID, &rec)
 	}
 	if billing != "" {
-		if rec.Account != "" {
-			perAccountBillingSnap = r.bumpBillingLocked(r.byAccountBilling, dayKey, rec.Account, billing, "day:"+dayKey+":acc:"+rec.Account+":bk:"+billing, &rec)
+		if accountUsageID != "" {
+			perAccountBillingSnap = r.bumpBillingLocked(r.byAccountBilling, dayKey, accountUsageID, billing, "day:"+dayKey+":acc:"+accountUsageID+":bk:"+billing, &rec)
 		}
 		if rec.KeyID != "" {
 			perKeyBillingSnap = r.bumpBillingLocked(r.byKeyBilling, dayKey, rec.KeyID, billing, "day:"+dayKey+":key:"+rec.KeyID+":bk:"+billing, &rec)
@@ -98,7 +107,7 @@ func (r *Recorder) RecordRequest(rec ingress.UsageRecord) {
 	}
 	if perAccountSnap != nil {
 		if data, err := json.Marshal(*perAccountSnap); err == nil {
-			_ = r.queue.Put(store.BucketUsage, "day:"+dayKey+":acc:"+rec.Account, data)
+			_ = r.queue.Put(store.BucketUsage, "day:"+dayKey+":acc:"+accountUsageID, data)
 		}
 	}
 	if perKeySnap != nil {
@@ -108,7 +117,7 @@ func (r *Recorder) RecordRequest(rec ingress.UsageRecord) {
 	}
 	if perAccountBillingSnap != nil {
 		if data, err := json.Marshal(*perAccountBillingSnap); err == nil {
-			_ = r.queue.Put(store.BucketUsage, "day:"+dayKey+":acc:"+rec.Account+":bk:"+billing, data)
+			_ = r.queue.Put(store.BucketUsage, "day:"+dayKey+":acc:"+accountUsageID+":bk:"+billing, data)
 		}
 	}
 	if perKeyBillingSnap != nil {
@@ -121,6 +130,13 @@ func (r *Recorder) RecordRequest(rec ingress.UsageRecord) {
 		if acc, ok := r.pool.Get(rec.Account); ok {
 			if data, err := json.Marshal(acc.Stats()); err == nil {
 				_ = r.queue.Put(store.BucketAccounts, "stats:"+rec.Account, data)
+			}
+		}
+	}
+	if rec.Account != "" && r.claudePool != nil && rec.Provider == "claude-pool" {
+		if acc, ok := r.claudePool.Get(rec.Account); ok {
+			if data, err := json.Marshal(acc.Stats()); err == nil {
+				_ = r.queue.Put(store.BucketClaudeAccounts, "stats:"+rec.Account, data)
 			}
 		}
 	}
