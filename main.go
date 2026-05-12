@@ -81,6 +81,8 @@ Commands:
   add-account [--config=PATH] [--no-browser]   Add a ChatGPT account via OAuth
   add-account --code=URL_OR_CODE        Add an account via a copy-pasted code
   add-claude-account --from=PATH [--email=EMAIL] Import a Claude Code OAuth account
+  add-claude-account --no-browser               Print Claude auth URL for manual code paste
+  add-claude-account --code=URL_OR_CODE          Add Claude account from pasted redirect URL
   list [--config=PATH]                  List accounts in pool/chatgpt/
   list-claude [--config=PATH]            List accounts in pool/claude/
   status [--config=PATH]                Show account/key counts and current usage
@@ -437,6 +439,7 @@ func cmdServe(args []string) error {
 		Token:            cfg.Server.AdminToken,
 		OAuthStart:       oauthStarter,
 		ClaudeOAuthStart: claudeOAuthStarter,
+		ChatGPTPoolDir:   chatgptPoolDir,
 	}
 	admin.Mount(mux)
 
@@ -534,24 +537,67 @@ func cmdStatus(args []string) error {
 }
 
 func cmdAddClaudeAccount(args []string) error {
-	from := flagValue(args, "--from=")
-	if from == "" {
-		return fmt.Errorf("--from=PATH required")
-	}
 	cfg, err := LoadConfig(parseConfigPath(args))
 	if err != nil {
 		return err
 	}
-	dir := cfg.PoolSubdir("claude")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
+
+	from := flagValue(args, "--from=")
+	noBrowser := false
+	codeInput := ""
+	abortPending := false
+	for _, a := range args {
+		switch {
+		case a == "--no-browser":
+			noBrowser = true
+		case strings.HasPrefix(a, "--code="):
+			codeInput = strings.TrimPrefix(a, "--code=")
+		case a == "--abort-pending":
+			abortPending = true
+		}
 	}
-	acc, err := cmd.ImportClaudeAccount(from, dir, flagValue(args, "--email="))
-	if err != nil {
-		return err
+
+	if abortPending {
+		if err := cmd.DeletePending(cfg.Paths.DataDir); err != nil {
+			return err
+		}
+		fmt.Println("pending Claude OAuth cleared")
+		return nil
 	}
-	fmt.Println("added claude:", acc.Email)
-	return nil
+
+	if noBrowser {
+		return cmd.AddClaudeAccountNoBrowser(cfg.Paths.DataDir)
+	}
+
+	if codeInput != "" {
+		dir := cfg.PoolSubdir("claude")
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return err
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		acc, err := cmd.AddClaudeAccountFromCode(ctx, cfg.Paths.DataDir, dir, codeInput, flagValue(args, "--email="))
+		if err != nil {
+			return err
+		}
+		fmt.Printf("added: %s (account_id=%s, plan=%s)\n", acc.Email, acc.AccountID, acc.SubscriptionType)
+		return nil
+	}
+
+	if from != "" {
+		dir := cfg.PoolSubdir("claude")
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return err
+		}
+		acc, err := cmd.ImportClaudeAccount(from, dir, flagValue(args, "--email="))
+		if err != nil {
+			return err
+		}
+		fmt.Println("added claude:", acc.Email)
+		return nil
+	}
+
+	return fmt.Errorf("usage: add-claude-account --from=PATH | --no-browser | --code=URL")
 }
 
 func cmdDisable(args []string, disable bool) error {

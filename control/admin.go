@@ -4,15 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/FL-Penly/proxy-gate/auth"
 	"github.com/FL-Penly/proxy-gate/broker"
 	"github.com/FL-Penly/proxy-gate/pricing"
+	"github.com/FL-Penly/proxy-gate/provider"
 	"github.com/FL-Penly/proxy-gate/store"
 )
 
@@ -27,6 +31,13 @@ type PricingService interface {
 	CalculateTokens(input, cached, output int64, model, tier string) (float64, bool)
 }
 
+type pendingManualOAuth struct {
+	Verifier    string
+	State       string
+	RedirectURI string
+	CreatedAt   time.Time
+}
+
 type AdminAPI struct {
 	Pool             *broker.Pool
 	ClaudePool       *broker.ClaudePool
@@ -39,6 +50,10 @@ type AdminAPI struct {
 	Token            string
 	OAuthStart       OAuthStarter
 	ClaudeOAuthStart OAuthStarter
+	ChatGPTPoolDir   string
+
+	muPending     sync.Mutex
+	pendingClaude *pendingManualOAuth
 }
 
 type accountSummary struct {
@@ -98,7 +113,11 @@ func (a *AdminAPI) Mount(mux *http.ServeMux) {
 	mux.Handle("POST /admin/ui/login", http.HandlerFunc(a.uiLogin))
 	mux.Handle("POST /admin/ui/logout", http.HandlerFunc(a.uiLogout))
 	mux.Handle("POST /admin/ui/oauth-start", a.gate(a.uiOAuthStart))
+	mux.Handle("POST /admin/ui/oauth-manual-start", a.gate(a.uiOAuthManualStart))
+	mux.Handle("POST /admin/ui/oauth-manual-finish", a.gate(a.uiOAuthManualFinish))
 	mux.Handle("POST /admin/ui/claude-oauth-start", a.gate(a.uiClaudeOAuthStart))
+	mux.Handle("POST /admin/ui/claude-oauth-manual-start", a.gate(a.uiClaudeOAuthManualStart))
+	mux.Handle("POST /admin/ui/claude-oauth-manual-finish", a.gate(a.uiClaudeOAuthManualFinish))
 	mux.Handle("GET /admin/accounts", a.gate(a.listAccounts))
 	mux.Handle("GET /admin/claude-accounts", a.gate(a.listClaudeAccounts))
 	mux.Handle("GET /admin/usage", a.gate(a.usage))
@@ -189,6 +208,219 @@ func (a *AdminAPI) uiClaudeOAuthStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"auth_url": authURL})
+}
+
+func (a *AdminAPI) uiOAuthManualStart(w http.ResponseWriter, _ *http.Request) {
+	redirectURI := fmt.Sprintf("http://localhost:%d%s", auth.OpenAICallbackPorts[0], auth.OpenAICallbackPath)
+	pkce, err := auth.NewPKCE()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	state, err := auth.NewState()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	authURL := auth.OpenAIAuthorizeURL(redirectURI, pkce.Challenge, state)
+	writeJSON(w, http.StatusOK, map[string]string{"authorize_url": authURL})
+}
+
+func (a *AdminAPI) uiOAuthManualFinish(w http.ResponseWriter, r *http.Request) {
+	if a.ChatGPTPoolDir == "" {
+		http.Error(w, "pool dir not configured", http.StatusServiceUnavailable)
+		return
+	}
+	var body struct {
+		CodeOrURL string `json:"code_or_url"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 8192)).Decode(&body); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	code, _, err := extractManualCode(body.CodeOrURL)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	pkce, err := auth.NewPKCE()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	redirectURI := fmt.Sprintf("http://localhost:%d%s", auth.OpenAICallbackPorts[0], auth.OpenAICallbackPath)
+	tok, err := provider.ExchangeOpenAICode(r.Context(), code, pkce.Verifier, redirectURI)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	claims, err := auth.ExtractAccountClaims(tok.AccessToken)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	if claims.Email == "" {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "empty email in token claims"})
+		return
+	}
+	expires := tok.ExpiresAt
+	if expires.IsZero() && !claims.ExpiresAt.IsZero() {
+		expires = claims.ExpiresAt
+	}
+	acc := &broker.Account{
+		Email:        claims.Email,
+		AccountID:    claims.AccountID,
+		PlanType:     broker.PlanType(strings.ToLower(claims.PlanType)),
+		AccessToken:  tok.AccessToken,
+		RefreshToken: tok.RefreshToken,
+		IDToken:      tok.IDToken,
+		ExpiresAt:    expires,
+		CreatedAt:    time.Now().UTC(),
+	}
+	if _, err := broker.SaveAccountFile(a.ChatGPTPoolDir, acc); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"email":      acc.Email,
+		"account_id": acc.AccountID,
+		"plan_type":  string(acc.PlanType),
+	})
+}
+
+func (a *AdminAPI) uiClaudeOAuthManualStart(w http.ResponseWriter, _ *http.Request) {
+	pkce, err := auth.NewPKCE()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	state, err := auth.NewState()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	redirectURI := fmt.Sprintf("http://localhost:%d%s", auth.ClaudeCallbackPorts[0], auth.ClaudeCallbackPath)
+	authURL := auth.ClaudeAuthorizeURL(redirectURI, pkce.Challenge, state)
+
+	a.muPending.Lock()
+	a.pendingClaude = &pendingManualOAuth{
+		Verifier:    pkce.Verifier,
+		State:       state,
+		RedirectURI: redirectURI,
+		CreatedAt:   time.Now().UTC(),
+	}
+	a.muPending.Unlock()
+
+	writeJSON(w, http.StatusOK, map[string]string{"authorize_url": authURL})
+}
+
+func (a *AdminAPI) uiClaudeOAuthManualFinish(w http.ResponseWriter, r *http.Request) {
+	if a.ClaudePool == nil {
+		http.Error(w, "claude pool not configured", http.StatusServiceUnavailable)
+		return
+	}
+	var body struct {
+		CodeOrURL string `json:"code_or_url"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 8192)).Decode(&body); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+
+	a.muPending.Lock()
+	pending := a.pendingClaude
+	a.muPending.Unlock()
+
+	if pending == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no pending Claude OAuth — click 'Start' first"})
+		return
+	}
+	if time.Since(pending.CreatedAt) > 10*time.Minute {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "pending OAuth expired — click 'Start' again"})
+		return
+	}
+
+	code, state, err := extractManualCode(body.CodeOrURL)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	if state != "" && pending.State != "" && state != pending.State {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "OAuth state mismatch"})
+		return
+	}
+	tok, err := provider.ExchangeClaudeCode(r.Context(), code, pending.Verifier, pending.RedirectURI, pending.State)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	prof, err := provider.GetClaudeProfile(r.Context(), tok.AccessToken)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	if prof.Email == "" {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "empty email in Claude profile"})
+		return
+	}
+	acc := &broker.ClaudeAccount{
+		Email:            prof.Email,
+		AccountID:        prof.AccountID,
+		SubscriptionType: prof.SubscriptionType,
+		RateLimitTier:    prof.RateLimitTier,
+		AccessToken:      tok.AccessToken,
+		RefreshToken:     tok.RefreshToken,
+		ExpiresAt:        tok.ExpiresAt,
+		CreatedAt:        time.Now().UTC(),
+	}
+	poolDir := a.ClaudePool.Dir()
+	if _, err := broker.SaveClaudeAccountFile(poolDir, acc); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	a.ClaudePool.Add(acc)
+
+	a.muPending.Lock()
+	a.pendingClaude = nil
+	a.muPending.Unlock()
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"email":             acc.Email,
+		"account_id":        acc.AccountID,
+		"subscription_type": acc.SubscriptionType,
+	})
+}
+
+func extractManualCode(input string) (code, state string, err error) {
+	trimmed := strings.TrimSpace(input)
+	if strings.HasPrefix(trimmed, "http://") || strings.HasPrefix(trimmed, "https://") {
+		idx := strings.IndexByte(trimmed, '?')
+		if idx < 0 {
+			return "", "", errors.New("URL has no query string")
+		}
+		for _, kv := range strings.Split(trimmed[idx+1:], "&") {
+			parts := strings.SplitN(kv, "=", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			switch parts[0] {
+			case "code":
+				code = parts[1]
+			case "state":
+				state = parts[1]
+			case "error":
+				return "", "", fmt.Errorf("oauth error: %s", parts[1])
+			}
+		}
+		if code == "" {
+			return "", "", errors.New("no code in URL")
+		}
+		return code, state, nil
+	}
+	if len(trimmed) < 10 {
+		return "", "", errors.New("input too short to be an authorization code")
+	}
+	return trimmed, "", nil
 }
 
 func (a *AdminAPI) uiLogout(w http.ResponseWriter, _ *http.Request) {

@@ -71,7 +71,7 @@ func TestClaudePoolAddPreservesRuntimeStats(t *testing.T) {
 	if !ok {
 		t.Fatalf("missing account")
 	}
-	if got.AccessToken != "new" || !got.Stats().Disabled || got.Stats().TotalInputTkn != 12 {
+	if got.AccessToken != "new" || got.Stats().Disabled || got.Stats().TotalInputTkn != 12 {
 		t.Fatalf("account=%+v stats=%+v", got, got.Stats())
 	}
 }

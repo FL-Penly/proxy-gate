@@ -1,13 +1,16 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/FL-Penly/proxy-gate/auth"
 	"github.com/FL-Penly/proxy-gate/broker"
+	"github.com/FL-Penly/proxy-gate/provider"
 )
 
 type claudeCredentialsFile struct {
@@ -99,4 +102,77 @@ func parseClaudeExpires(v any) time.Time {
 		}
 	}
 	return time.Time{}
+}
+
+func AddClaudeAccountNoBrowser(dataDir string) error {
+	pkce, err := auth.NewPKCE()
+	if err != nil {
+		return err
+	}
+	state, err := auth.NewState()
+	if err != nil {
+		return err
+	}
+	redirectURI := fmt.Sprintf("http://localhost:%d%s", auth.ClaudeCallbackPorts[0], auth.ClaudeCallbackPath)
+	authURL := auth.ClaudeAuthorizeURL(redirectURI, pkce.Challenge, state)
+
+	pending := &PendingOAuth{
+		Verifier:    pkce.Verifier,
+		State:       state,
+		RedirectURI: redirectURI,
+		CreatedAt:   time.Now().UTC(),
+	}
+	if err := WritePending(dataDir, pending); err != nil {
+		return err
+	}
+
+	fmt.Fprintln(os.Stderr, "[auth] Open this URL in a browser:")
+	fmt.Fprintln(os.Stderr, authURL)
+	fmt.Fprintln(os.Stderr, "[auth] After login, the browser will redirect to a localhost URL that fails to load.")
+	fmt.Fprintln(os.Stderr, "[auth] COPY the full address-bar URL and run:")
+	fmt.Fprintln(os.Stderr, "[auth]   proxy-gate add-claude-account --code='<paste URL>'")
+	return nil
+}
+
+func AddClaudeAccountFromCode(ctx context.Context, dataDir, poolDir, codeOrURL, email string) (*broker.ClaudeAccount, error) {
+	pending, err := ReadPending(dataDir)
+	if err != nil {
+		return nil, err
+	}
+	code, state, err := extractCodeFromInput(codeOrURL)
+	if err != nil {
+		return nil, err
+	}
+	if state != "" && pending.State != "" && state != pending.State {
+		return nil, fmt.Errorf("OAuth state mismatch")
+	}
+	tok, err := provider.ExchangeClaudeCode(ctx, code, pending.Verifier, pending.RedirectURI, pending.State)
+	if err != nil {
+		return nil, fmt.Errorf("exchange: %w", err)
+	}
+	prof, err := provider.GetClaudeProfile(ctx, tok.AccessToken)
+	if err != nil {
+		return nil, fmt.Errorf("profile: %w", err)
+	}
+	if email == "" {
+		email = prof.Email
+	}
+	if email == "" {
+		return nil, fmt.Errorf("claude auth: email missing from profile; pass --email=you@example.com")
+	}
+	acc := &broker.ClaudeAccount{
+		Email:            email,
+		AccountID:        prof.AccountID,
+		SubscriptionType: prof.SubscriptionType,
+		RateLimitTier:    prof.RateLimitTier,
+		AccessToken:      tok.AccessToken,
+		RefreshToken:     tok.RefreshToken,
+		ExpiresAt:        tok.ExpiresAt,
+		CreatedAt:        time.Now().UTC(),
+	}
+	if _, err := broker.SaveClaudeAccountFile(poolDir, acc); err != nil {
+		return nil, err
+	}
+	_ = DeletePending(dataDir)
+	return acc, nil
 }

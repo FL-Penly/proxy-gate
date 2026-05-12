@@ -316,6 +316,18 @@ func (p *ClaudePool) Add(a *ClaudeAccount) {
 	if existing := p.accounts[a.Email]; existing != nil {
 		a.ApplyStats(existing.account.Stats())
 		entry.inflight.Store(existing.inflight.Load())
+		if a.AccessToken != existing.account.AccessToken {
+			a.updateState(func(st *claudeAccountState) {
+				st.Dead = false
+				st.DeadReason = ""
+				st.Disabled = false
+				st.CooldownUntil = time.Time{}
+				st.RefreshFailCount = 0
+				st.LastRefreshErr = ""
+				st.UsageFailCount = 0
+				st.LastUsageErr = ""
+			})
+		}
 	}
 	p.accounts[a.Email] = entry
 }

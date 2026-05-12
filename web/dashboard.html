@@ -204,7 +204,7 @@ main{padding:18px 24px;max-width:1400px;margin:0 auto}
       <button class="add" id="addClaude">+ Add Claude account</button>
     </div>
     <div class="add-status hidden" id="claudeAddStatus"></div>
-    <div class="info-banner">OAuth login opens Claude in a new tab. Primary/Secondary are best-effort Claude OAuth usage windows: 5h and 7d. If browser OAuth fails, use <button class="btn" id="importClaudeJSON">Import JSON</button>.</div>
+    <div class="info-banner">Click "Add Claude account" to get an auth URL — open it in any browser, then paste the redirect URL back. Primary/Secondary are best-effort Claude OAuth usage windows: 5h and 7d. Alternatively: <button class="btn" id="importClaudeJSON">Import JSON</button>.</div>
     <div id="claudeList"></div>
   </div>
 </div>
@@ -218,6 +218,26 @@ main{padding:18px 24px;max-width:1400px;margin:0 auto}
   <div class="modal-actions">
     <button class="btn-cancel" id="claudeModalCancel">Cancel</button>
     <button class="btn-primary" id="claudeModalImport">Import</button>
+  </div>
+</div>
+</div>
+
+<div id="manualOAuthModal" class="modal-overlay hidden">
+<div class="modal">
+  <h3 id="manualOAuthTitle">Add Account (Manual Code)</h3>
+  <div id="manualStep1">
+    <p>Step 1: Copy this URL and open it in any browser. Log in, then copy the redirect URL from your address bar.</p>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:12px">
+      <input id="manualAuthURL" readonly style="flex:1;background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:4px;font-family:var(--mono);font-size:11px">
+      <button class="btn" id="manualCopyURL" style="white-space:nowrap">Copy</button>
+    </div>
+    <p>Step 2: After login, the browser redirects to a localhost URL that fails to load. Paste that full URL below.</p>
+    <textarea id="manualCodeInput" placeholder="http://localhost:1461/callback?code=...&state=..." style="min-height:80px"></textarea>
+    <div class="modal-err" id="manualOAuthErr"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="manualOAuthCancel">Cancel</button>
+      <button class="btn-primary" id="manualOAuthFinish">Finish</button>
+    </div>
   </div>
 </div>
 </div>
@@ -309,44 +329,22 @@ function setTab(name) {
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => setTab(t.dataset.tab));
 setTab(activeTab);
 
-let watchTimer = null;
+let manualOAuthType = '';
+
 $('addAccount').onclick = async () => {
-  const btn = $('addAccount'), st = $('addStatus');
-  btn.disabled = true;
-  st.classList.remove('hidden','ok','err');
-  st.textContent = 'opening OpenAI auth in new tab…';
+  manualOAuthType = 'openai';
+  $('manualOAuthTitle').textContent = 'Add OpenAI Account';
+  $('manualCodeInput').value = '';
+  $('manualCodeInput').placeholder = 'http://localhost:1455/auth/callback?code=...&state=...';
+  $('manualOAuthErr').textContent = '';
+  $('manualAuthURL').value = 'generating…';
+  $('manualOAuthModal').classList.remove('hidden');
   try {
-    const r = await api('/admin/ui/oauth-start', {method:'POST'});
-    if (!r.auth_url) throw new Error('no auth_url');
-    const w = window.open(r.auth_url, '_blank');
-    if (!w) throw new Error('popup blocked — allow popups for this site');
-    st.textContent = 'waiting for OAuth completion (poll every 3s, max 5 min)…';
-    const baseline = (await api('/admin/accounts')).map(a => a.email).sort().join(',');
-    if (watchTimer) clearInterval(watchTimer);
-    let elapsed = 0;
-    watchTimer = setInterval(async () => {
-      elapsed += 3;
-      try {
-        const accs = await api('/admin/accounts');
-        const cur = accs.map(a => a.email).sort().join(',');
-        if (cur !== baseline) {
-          clearInterval(watchTimer); watchTimer = null;
-          st.classList.add('ok'); st.textContent = `account added (${accs.length} total)`;
-          btn.disabled = false;
-          load();
-          setTimeout(() => st.classList.add('hidden'), 5000);
-          return;
-        }
-      } catch {}
-      if (elapsed >= 300) {
-        clearInterval(watchTimer); watchTimer = null;
-        st.classList.add('err'); st.textContent = 'OAuth not completed within 5 min — try again';
-        btn.disabled = false;
-      }
-    }, 3000);
+    const r = await api('/admin/ui/oauth-manual-start', {method:'POST'});
+    $('manualAuthURL').value = r.authorize_url || '';
   } catch (e) {
-    st.classList.add('err'); st.textContent = String(e.message || e);
-    btn.disabled = false;
+    $('manualAuthURL').value = '';
+    $('manualOAuthErr').textContent = String(e.message || e);
   }
 };
 
@@ -721,41 +719,19 @@ async function onClaudeAction(e) {
 }
 
 $('addClaude').onclick = async () => {
-  const btn = $('addClaude'), st = $('claudeAddStatus');
-  btn.disabled = true;
-  st.classList.remove('hidden','ok','err');
-  st.textContent = 'opening Claude OAuth in new tab…';
+  manualOAuthType = 'claude';
+  $('manualOAuthTitle').textContent = 'Add Claude Account';
+  $('manualCodeInput').value = '';
+  $('manualCodeInput').placeholder = 'http://localhost:1461/callback?code=...&state=...';
+  $('manualOAuthErr').textContent = '';
+  $('manualAuthURL').value = 'generating…';
+  $('manualOAuthModal').classList.remove('hidden');
   try {
-    const baseline = (await api('/admin/claude-accounts')).map(a => a.email).sort().join(',');
-    const r = await api('/admin/ui/claude-oauth-start', {method:'POST'});
-    if (!r.auth_url) throw new Error('no auth_url');
-    const w = window.open(r.auth_url, '_blank');
-    if (!w) throw new Error('popup blocked — allow popups for this site');
-    st.textContent = 'waiting for Claude OAuth completion (poll every 3s, max 5 min)…';
-    let elapsed = 0;
-    const timer = setInterval(async () => {
-      elapsed += 3;
-      try {
-        const accs = await api('/admin/claude-accounts');
-        const cur = accs.map(a => a.email).sort().join(',');
-        if (cur !== baseline) {
-          clearInterval(timer);
-          st.classList.add('ok'); st.textContent = `Claude account added (${accs.length} total)`;
-          btn.disabled = false;
-          load();
-          setTimeout(() => st.classList.add('hidden'), 5000);
-          return;
-        }
-      } catch {}
-      if (elapsed >= 300) {
-        clearInterval(timer);
-        st.classList.add('err'); st.textContent = 'Claude OAuth not completed within 5 min — use Import JSON fallback';
-        btn.disabled = false;
-      }
-    }, 3000);
+    const r = await api('/admin/ui/claude-oauth-manual-start', {method:'POST'});
+    $('manualAuthURL').value = r.authorize_url || '';
   } catch (e) {
-    st.classList.add('err'); st.textContent = String(e.message || e);
-    btn.disabled = false;
+    $('manualAuthURL').value = '';
+    $('manualOAuthErr').textContent = String(e.message || e);
   }
 };
 
@@ -791,6 +767,48 @@ $('claudeModalImport').onclick = async () => {
     const msg = e.message || String(e);
     try { const j = JSON.parse(msg); $('claudeModalErr').textContent = j.error || msg; }
     catch { $('claudeModalErr').textContent = msg; }
+  } finally { btn.disabled = false; }
+};
+
+$('manualCopyURL').onclick = () => {
+  const input = $('manualAuthURL');
+  navigator.clipboard.writeText(input.value).then(() => {
+    $('manualCopyURL').textContent = 'Copied!';
+    setTimeout(() => { $('manualCopyURL').textContent = 'Copy'; }, 2000);
+  }).catch(() => {
+    input.select();
+  });
+};
+
+$('manualOAuthCancel').onclick = () => $('manualOAuthModal').classList.add('hidden');
+$('manualOAuthModal').onclick = (e) => { if (e.target === $('manualOAuthModal')) $('manualOAuthModal').classList.add('hidden'); };
+
+$('manualOAuthFinish').onclick = async () => {
+  const raw = $('manualCodeInput').value.trim();
+  if (!raw) { $('manualOAuthErr').textContent = 'Paste the redirect URL first'; return; }
+  const btn = $('manualOAuthFinish');
+  btn.disabled = true;
+  $('manualOAuthErr').textContent = '';
+  const endpoint = manualOAuthType === 'claude'
+    ? '/admin/ui/claude-oauth-manual-finish'
+    : '/admin/ui/oauth-manual-finish';
+  try {
+    const r = await api(endpoint, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({code_or_url: raw}),
+    });
+    $('manualOAuthModal').classList.add('hidden');
+    const st = manualOAuthType === 'claude' ? $('claudeAddStatus') : $('addStatus');
+    st.classList.remove('hidden','err');
+    st.classList.add('ok');
+    st.textContent = `added ${r.email}`;
+    setTimeout(() => st.classList.add('hidden'), 5000);
+    load();
+  } catch (e) {
+    const msg = e.message || String(e);
+    try { const j = JSON.parse(msg); $('manualOAuthErr').textContent = j.error || msg; }
+    catch { $('manualOAuthErr').textContent = msg; }
   } finally { btn.disabled = false; }
 };
 
