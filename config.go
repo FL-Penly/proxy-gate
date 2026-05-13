@@ -39,6 +39,7 @@ type Config struct {
 type ServerConfig struct {
 	Addr          string `toml:"addr"`
 	AdminToken    string `toml:"admin_token"`
+	ProxyToken    string `toml:"proxy_token"`
 	PublicBaseURL string `toml:"public_base_url"`
 }
 
@@ -118,6 +119,9 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("PROXYGATE_ADMIN_TOKEN"); v != "" {
 		cfg.Server.AdminToken = v
+	}
+	if v := os.Getenv("PROXYGATE_PROXY_TOKEN"); v != "" {
+		cfg.Server.ProxyToken = v
 	}
 	if v := os.Getenv("PROXYGATE_PUBLIC_BASE_URL"); v != "" {
 		cfg.Server.PublicBaseURL = v

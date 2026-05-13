@@ -8,6 +8,10 @@ addr = "127.0.0.1:19527"
 # Generate one with: openssl rand -hex 32
 admin_token = ""
 
+# Optional bearer token gate for /v1/* proxy endpoints.
+# Environment override: PROXYGATE_PROXY_TOKEN.
+proxy_token = ""
+
 # Optional: a separate base URL clients should use when they hit /v1/*.
 # Defaults to http://<addr>/v1.
 public_base_url = ""

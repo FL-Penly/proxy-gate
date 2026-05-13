@@ -214,7 +214,7 @@ func cmdServe(args []string) error {
 		openai.BaseURL = v
 	}
 
-	proxyToken := os.Getenv("PROXYGATE_PROXY_TOKEN")
+	proxyToken := cfg.Server.ProxyToken
 	if proxyToken == "" {
 		logger.Warn("PROXYGATE_PROXY_TOKEN unset, /v1/* endpoints accept any caller")
 	}
