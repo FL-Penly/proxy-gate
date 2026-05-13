@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 
 INSTALL_DIR="$HOME/.proxy-gate"
 LAUNCHD_LABEL="com.proxygate.server"
+OS="$(uname -s)"
 
 if ! command -v go >/dev/null 2>&1; then
   # Try common Homebrew Go paths
@@ -16,12 +17,27 @@ if ! command -v go >/dev/null 2>&1; then
   echo "error: go not found in PATH"; exit 1
 fi
 
-echo "==> go build"
-go build -o proxy-gate .
-
 echo "==> install to $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
-cp proxy-gate "$INSTALL_DIR/proxy-gate"
+tmp_bin="$(mktemp "$INSTALL_DIR/proxy-gate.tmp.XXXXXX")"
+cleanup() {
+  rm -f "$tmp_bin"
+}
+trap cleanup EXIT
+
+echo "==> go build"
+go build -o "$tmp_bin" .
+chmod 755 "$tmp_bin"
+mv -f "$tmp_bin" "$INSTALL_DIR/proxy-gate"
+trap - EXIT
+
+if [ "$OS" != "Darwin" ]; then
+  echo "==> installed $INSTALL_DIR/proxy-gate"
+  if pgrep -f 'proxy-gate serve' >/dev/null 2>&1; then
+    echo "==> proxy-gate is already running; restart it manually to use the new binary"
+  fi
+  exit 0
+fi
 
 echo "==> ad-hoc codesign (required, otherwise launchd kills with OS_REASON_CODESIGNING)"
 codesign --force --sign - "$INSTALL_DIR/proxy-gate"
