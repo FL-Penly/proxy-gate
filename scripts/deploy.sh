@@ -9,7 +9,7 @@ OS="$(uname -s)"
 
 if ! command -v go >/dev/null 2>&1; then
   # Try common Homebrew Go paths
-  for d in /opt/homebrew/opt/go/bin /usr/local/opt/go/bin /opt/homebrew/opt/go@*/bin; do
+  for d in /usr/local/go/bin /opt/homebrew/opt/go/bin /usr/local/opt/go/bin /opt/homebrew/opt/go@*/bin; do
     [ -x "$d/go" ] && export PATH="$d:$PATH" && break
   done
 fi
@@ -49,7 +49,7 @@ else
     sleep 1
   fi
   echo "==> starting proxy-gate (nohup)"
-  nohup "$INSTALL_DIR/proxy-gate" serve >> /tmp/proxy-gate.log 2>&1 &
+  (cd "$INSTALL_DIR" && nohup ./proxy-gate serve --config "$INSTALL_DIR/config.toml" >> /tmp/proxy-gate.log 2>&1 &)
 fi
 
 for i in 1 2 3 4 5 6 7 8; do
