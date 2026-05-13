@@ -40,6 +40,14 @@ pin_ttl = "1h"
 # How often to poll chatgpt.com/backend-api/wham/usage per account.
 poll_interval = "5m"
 
+[vertex]
+# Optional Vertex AI fallback settings for Claude routing.
+# Environment overrides: PROXYGATE_VERTEX_PROJECT_ID, PROXYGATE_VERTEX_LOCATION,
+# PROXYGATE_VERTEX_CREDENTIALS_FILE.
+project_id = ""
+location = ""
+credentials_file = ""
+
 [log]
 # "debug" | "info" | "warn" | "error"
 level = "info"

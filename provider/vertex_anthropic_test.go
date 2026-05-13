@@ -90,3 +90,16 @@ func TestParseVertexAliases(t *testing.T) {
 		t.Fatalf("project=%q location=%q", project, location)
 	}
 }
+
+func TestParseGCloudConfig(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/config_default"
+	raw := "[core]\nproject = lucid-sonar-402610\n[compute]\nregion = us-east5\n"
+	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	project, location := parseGCloudConfig(path)
+	if project != "lucid-sonar-402610" || location != "us-east5" {
+		t.Fatalf("project=%q location=%q", project, location)
+	}
+}

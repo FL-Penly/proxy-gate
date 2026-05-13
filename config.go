@@ -13,17 +13,17 @@ import (
 )
 
 const (
-	defaultAddr               = "127.0.0.1:19527"
-	defaultDataDir            = "./data"
-	defaultPoolDir            = "./pool"
-	defaultRoutingPriority    = "account-first"
-	defaultDrainMultiplier    = 1.0
-	defaultPrimaryBonus       = 0.1
-	defaultPrimaryPctMax      = 1.0
-	defaultSecondaryPctMax    = 1.0
-	defaultPinTTL             = time.Hour
-	defaultWhamPollInterval   = 5 * time.Minute
-	defaultLogLevel           = "info"
+	defaultAddr             = "127.0.0.1:19527"
+	defaultDataDir          = "./data"
+	defaultPoolDir          = "./pool"
+	defaultRoutingPriority  = "account-first"
+	defaultDrainMultiplier  = 1.0
+	defaultPrimaryBonus     = 0.1
+	defaultPrimaryPctMax    = 1.0
+	defaultSecondaryPctMax  = 1.0
+	defaultPinTTL           = time.Hour
+	defaultWhamPollInterval = 5 * time.Minute
+	defaultLogLevel         = "info"
 )
 
 type Config struct {
@@ -32,6 +32,7 @@ type Config struct {
 	Routing RoutingConfig `toml:"routing"`
 	Broker  BrokerConfig  `toml:"broker"`
 	Wham    WhamConfig    `toml:"wham"`
+	Vertex  VertexConfig  `toml:"vertex"`
 	Log     LogConfig     `toml:"log"`
 }
 
@@ -60,6 +61,12 @@ type BrokerConfig struct {
 
 type WhamConfig struct {
 	PollInterval time.Duration `toml:"poll_interval"`
+}
+
+type VertexConfig struct {
+	ProjectID       string `toml:"project_id"`
+	Location        string `toml:"location"`
+	CredentialsFile string `toml:"credentials_file"`
 }
 
 type LogConfig struct {
@@ -127,6 +134,15 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("PROXYGATE_LOG_LEVEL"); v != "" {
 		cfg.Log.Level = v
 	}
+	if v := firstEnv("PROXYGATE_VERTEX_PROJECT_ID", "ANTHROPIC_VERTEX_PROJECT_ID", "GOOGLE_CLOUD_PROJECT", "GCLOUD_PROJECT"); v != "" {
+		cfg.Vertex.ProjectID = v
+	}
+	if v := firstEnv("PROXYGATE_VERTEX_LOCATION", "VERTEX_LOCATION", "CLOUD_ML_REGION", "GOOGLE_CLOUD_LOCATION"); v != "" {
+		cfg.Vertex.Location = v
+	}
+	if v := firstEnv("PROXYGATE_VERTEX_CREDENTIALS_FILE", "GOOGLE_APPLICATION_CREDENTIALS"); v != "" {
+		cfg.Vertex.CredentialsFile = v
+	}
 }
 
 func (c *Config) normalize() error {
@@ -164,6 +180,15 @@ func (c *Config) normalize() error {
 		c.Log.Level = defaultLogLevel
 	}
 	return nil
+}
+
+func firstEnv(names ...string) string {
+	for _, name := range names {
+		if v := strings.TrimSpace(os.Getenv(name)); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func (c Config) DBPath() string {

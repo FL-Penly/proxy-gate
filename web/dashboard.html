@@ -342,6 +342,19 @@ $('refreshAll').onclick = load;
 let activeTab = localStorage.getItem('proxygate_tab') || 'openai';
 let fallbackPolicy = {enabled:true,rules:[]};
 let variantCatalog = [];
+const claudeFromModels = [
+  {id:'claude-opus-4-7', label:'Opus 4.7'},
+  {id:'claude-opus-4-6', label:'Opus 4.6'},
+  {id:'claude-sonnet-4-6', label:'Sonnet 4.6'},
+  {id:'claude-sonnet-4-5', label:'Sonnet 4.5'},
+  {id:'claude-haiku-4-5', label:'Haiku 4.5'},
+];
+const claudeVertexModels = [
+  {id:'claude-opus-4-6', label:'Opus 4.6'},
+  {id:'claude-sonnet-4-6', label:'Sonnet 4.6 · 1M'},
+  {id:'claude-sonnet-4-5', label:'Sonnet 4.5'},
+  {id:'claude-haiku-4-5', label:'Haiku 4.5'},
+];
 function setTab(name) {
   if (!['openai','claude','keys'].includes(name)) name = 'openai';
   activeTab = name;
@@ -723,15 +736,29 @@ function variantOptions(selected) {
   return base.map(v => `<option value="${esc(v.id)}" ${v.id === selected ? 'selected' : ''}>${esc(v.label || v.id)}</option>`).join('');
 }
 
+function modelOptions(models, selected) {
+  const seen = new Set();
+  const opts = [];
+  models.forEach(m => {
+    if (!m.id || seen.has(m.id)) return;
+    seen.add(m.id);
+    opts.push(m);
+  });
+  if (selected && !seen.has(selected)) {
+    opts.unshift({id:selected, label:selected});
+  }
+  return opts.map(m => `<option value="${esc(m.id)}" ${m.id === selected ? 'selected' : ''}>${esc(m.label || m.id)}</option>`).join('');
+}
+
 function renderFallbackRules() {
   $('fallbackEnabled').checked = !!fallbackPolicy.enabled;
   const rules = fallbackPolicy.rules || [];
   const head = `<div class="row head f"><span>On</span><span>From model</span><span>From variant</span><span>To Vertex model</span><span>To variant</span><span style="text-align:right">Actions</span></div>`;
   const rows = rules.map((r, i) => `<div class="row f" data-rule="${i}">
     <label class="routeToggle"><input type="checkbox" data-field="enabled" ${r.enabled ? 'checked' : ''}> on</label>
-    <input class="routeInput" data-field="from_model" value="${esc(r.from_model || '')}" placeholder="claude-opus-4-7">
+    <select class="routeSelect" data-field="from_model">${modelOptions(claudeFromModels, r.from_model || '')}</select>
     <input class="routeInput" data-field="from_variant" value="${esc(r.from_variant || '')}" placeholder="any">
-    <input class="routeInput" data-field="to_model" value="${esc(r.to_model || '')}" placeholder="claude-sonnet-4-6">
+    <select class="routeSelect" data-field="to_model">${modelOptions(claudeVertexModels, r.to_model || '')}</select>
     <select class="routeSelect" data-field="to_variant">${variantOptions(r.to_variant || 'preserve')}</select>
     <span class="actions"><button class="btn danger" data-act="deleteFallback">×</button></span>
   </div>`).join('');
@@ -908,7 +935,7 @@ $('manualOAuthFinish').onclick = async () => {
 
 $('addFallbackRule').onclick = () => {
   fallbackPolicy.rules = fallbackPolicy.rules || [];
-  fallbackPolicy.rules.push({enabled:true,from_model:'',from_variant:'',to_model:'',to_variant:'preserve'});
+  fallbackPolicy.rules.push({enabled:true,from_model:'claude-sonnet-4-6',from_variant:'',to_model:'claude-sonnet-4-6',to_variant:'preserve'});
   renderFallbackRules();
 };
 

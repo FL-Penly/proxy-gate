@@ -94,7 +94,7 @@ func ClaudeVariantCatalog() []ClaudeVariantInfo {
 		{ID: "thinking-16k", Label: "Thinking 16k", Description: "Set Anthropic thinking budget to 16k tokens."},
 		{ID: "thinking-32k", Label: "Thinking 32k", Description: "Set Anthropic thinking budget to 32k tokens."},
 		{ID: "thinking-64k", Label: "Thinking 64k", Description: "Set Anthropic thinking budget to 64k tokens."},
-		{ID: "long-context", Label: "Long Context", Description: "No request patch for Claude 4.6+ 1M models; kept as an explicit routing label."},
+		{ID: "long-context", Label: "Long Context 1M", Description: "No request patch for Claude 4.6+ 1M models; kept as an explicit routing label."},
 	}
 }
 

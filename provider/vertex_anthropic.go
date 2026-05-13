@@ -25,9 +25,10 @@ const (
 )
 
 type VertexAnthropicConfig struct {
-	ProjectID  string `json:"project_id"`
-	Location   string `json:"location"`
-	AuthMethod string `json:"auth_method,omitempty"`
+	ProjectID       string `json:"project_id"`
+	Location        string `json:"location"`
+	CredentialsFile string `json:"-"`
+	AuthMethod      string `json:"auth_method,omitempty"`
 }
 
 type VertexAnthropicStatus struct {
@@ -57,9 +58,14 @@ type AnthropicVertexForwardRequest struct {
 	IncomingHeaders http.Header
 }
 
-func NewAnthropicVertexClient(ctx context.Context) *AnthropicVertexClient {
+func NewAnthropicVertexClient(ctx context.Context, overrides ...VertexAnthropicConfig) *AnthropicVertexClient {
 	cfg := DetectVertexAnthropicConfig()
-	ts, method := DefaultVertexTokenSource(ctx)
+	if len(overrides) > 0 {
+		cfg.ProjectID = firstNonEmpty(overrides[0].ProjectID, cfg.ProjectID)
+		cfg.Location = firstNonEmpty(overrides[0].Location, cfg.Location)
+		cfg.CredentialsFile = firstNonEmpty(overrides[0].CredentialsFile, cfg.CredentialsFile)
+	}
+	ts, method := DefaultVertexTokenSource(ctx, cfg.CredentialsFile)
 	cfg.AuthMethod = method
 	return &AnthropicVertexClient{
 		HTTPClient:  &http.Client{Timeout: 0},
@@ -184,7 +190,36 @@ func DetectVertexAnthropicConfig() VertexAnthropicConfig {
 	if project == "" {
 		project = strings.TrimSpace(runGCloudValue("project"))
 	}
+	if project == "" || location == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			gProject, gLocation := parseGCloudConfig(filepath.Join(home, ".config", "gcloud", "configurations", "config_default"))
+			project = firstNonEmpty(project, gProject)
+			location = firstNonEmpty(location, gLocation)
+		}
+	}
 	return VertexAnthropicConfig{ProjectID: project, Location: location}
+}
+
+func parseGCloudConfig(path string) (project, location string) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", ""
+	}
+	for _, line := range strings.Split(string(raw), "\n") {
+		key, val, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		val = strings.TrimSpace(val)
+		switch key {
+		case "project":
+			project = val
+		case "compute/region", "region", "location":
+			location = val
+		}
+	}
+	return project, location
 }
 
 func parseVertexAliases(path string) (project, location string) {
@@ -239,8 +274,12 @@ func firstNonEmpty(vals ...string) string {
 	return ""
 }
 
-func DefaultVertexTokenSource(ctx context.Context) (VertexTokenSource, string) {
-	if ts, err := newADCTokenSource(ctx); err == nil {
+func DefaultVertexTokenSource(ctx context.Context, credentialsFile ...string) (VertexTokenSource, string) {
+	file := ""
+	if len(credentialsFile) > 0 {
+		file = strings.TrimSpace(credentialsFile[0])
+	}
+	if ts, err := newADCTokenSource(ctx, file); err == nil {
 		return ts, ts.Method()
 	}
 	if _, err := exec.LookPath("gcloud"); err == nil {
@@ -254,8 +293,20 @@ type adcTokenSource struct {
 	src oauth2.TokenSource
 }
 
-func newADCTokenSource(ctx context.Context) (*adcTokenSource, error) {
-	creds, err := google.FindDefaultCredentials(ctx, VertexCloudPlatformScope)
+func newADCTokenSource(ctx context.Context, credentialsFile string) (*adcTokenSource, error) {
+	var (
+		creds *google.Credentials
+		err   error
+	)
+	if credentialsFile != "" {
+		raw, readErr := os.ReadFile(credentialsFile)
+		if readErr != nil {
+			return nil, readErr
+		}
+		creds, err = google.CredentialsFromJSON(ctx, raw, VertexCloudPlatformScope)
+	} else {
+		creds, err = google.FindDefaultCredentials(ctx, VertexCloudPlatformScope)
+	}
 	if err != nil {
 		return nil, err
 	}

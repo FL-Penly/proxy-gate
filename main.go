@@ -251,7 +251,11 @@ func cmdServe(args []string) error {
 	if v := os.Getenv("PROXYGATE_ANTHROPIC_BASE_URL"); v != "" {
 		anthropicClient.BaseURL = v
 	}
-	vertexClient := provider.NewAnthropicVertexClient(context.Background())
+	vertexClient := provider.NewAnthropicVertexClient(context.Background(), provider.VertexAnthropicConfig{
+		ProjectID:       cfg.Vertex.ProjectID,
+		Location:        cfg.Vertex.Location,
+		CredentialsFile: cfg.Vertex.CredentialsFile,
+	})
 	messages := &ingress.MessagesHandler{
 		ClaudePool:      claudePool,
 		KeyPool:         keyPool,
