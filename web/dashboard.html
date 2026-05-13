@@ -350,10 +350,12 @@ const claudeFromModels = [
   {id:'claude-haiku-4-5', label:'Haiku 4.5'},
 ];
 const claudeVertexModels = [
-  {id:'claude-opus-4-6', label:'Opus 4.6'},
-  {id:'claude-sonnet-4-6', label:'Sonnet 4.6'},
-  {id:'claude-sonnet-4-5', label:'Sonnet 4.5'},
-  {id:'claude-haiku-4-5', label:'Haiku 4.5'},
+  {id:'claude-opus-4-6', label:'Opus 4.6 · normal', variant:'preserve'},
+  {id:'claude-opus-4-6', label:'Opus 4.6 · 1M', variant:'long-context'},
+  {id:'claude-sonnet-4-6', label:'Sonnet 4.6 · normal', variant:'preserve'},
+  {id:'claude-sonnet-4-6', label:'Sonnet 4.6 · 1M', variant:'long-context'},
+  {id:'claude-sonnet-4-5', label:'Sonnet 4.5', variant:'preserve'},
+  {id:'claude-haiku-4-5', label:'Haiku 4.5', variant:'preserve'},
 ];
 function setTab(name) {
   if (!['openai','claude','keys'].includes(name)) name = 'openai';
@@ -755,6 +757,25 @@ function modelOptions(models, selected) {
   return opts.map(m => `<option value="${esc(m.id)}" ${m.id === selected ? 'selected' : ''}>${esc(m.label || m.id)}</option>`).join('');
 }
 
+function targetModelValue(rule) {
+  const model = rule.to_model || '';
+  const variant = (rule.to_variant || 'preserve') === 'long-context' ? 'long-context' : 'preserve';
+  return `${model}@@${variant}`;
+}
+
+function targetModelOptions(rule) {
+  const selected = targetModelValue(rule);
+  const opts = claudeVertexModels.map(m => {
+    const variant = m.variant || 'preserve';
+    const value = `${m.id}@@${variant}`;
+    return `<option value="${esc(value)}" ${value === selected ? 'selected' : ''}>${esc(m.label || m.id)}</option>`;
+  });
+  if (rule.to_model && !claudeVertexModels.some(m => `${m.id}@@${m.variant || 'preserve'}` === selected)) {
+    opts.unshift(`<option value="${esc(selected)}" selected>${esc(rule.to_model)}</option>`);
+  }
+  return opts.join('');
+}
+
 function renderFallbackRules() {
   $('fallbackEnabled').checked = !!fallbackPolicy.enabled;
   const rules = fallbackPolicy.rules || [];
@@ -763,7 +784,7 @@ function renderFallbackRules() {
     <label class="routeToggle"><input type="checkbox" data-field="enabled" ${r.enabled ? 'checked' : ''}> on</label>
     <select class="routeSelect" data-field="from_model">${modelOptions(claudeFromModels, r.from_model || '')}</select>
     <select class="routeSelect" data-field="from_variant">${fromVariantOptions(r.from_variant || '')}</select>
-    <select class="routeSelect" data-field="to_model">${modelOptions(claudeVertexModels, r.to_model || '')}</select>
+    <select class="routeSelect" data-field="to_target">${targetModelOptions(r)}</select>
     <select class="routeSelect" data-field="to_variant">${variantOptions(r.to_variant || 'preserve')}</select>
     <span class="actions"><button class="btn danger" data-act="deleteFallback">×</button></span>
   </div>`).join('');
@@ -781,7 +802,15 @@ function onFallbackField(e) {
   const idx = Number(row.dataset.rule);
   const field = e.target.dataset.field;
   if (!fallbackPolicy.rules[idx]) return;
+  if (field === 'to_target') {
+    const [model, variant] = e.target.value.split('@@');
+    fallbackPolicy.rules[idx].to_model = model || '';
+    fallbackPolicy.rules[idx].to_variant = variant || 'preserve';
+    renderFallbackRules();
+    return;
+  }
   fallbackPolicy.rules[idx][field] = field === 'enabled' ? e.target.checked : e.target.value.trim();
+  if (field === 'to_variant') renderFallbackRules();
 }
 
 function onDeleteFallbackRule(e) {
