@@ -351,7 +351,7 @@ const claudeFromModels = [
 ];
 const claudeVertexModels = [
   {id:'claude-opus-4-6', label:'Opus 4.6'},
-  {id:'claude-sonnet-4-6', label:'Sonnet 4.6 · 1M'},
+  {id:'claude-sonnet-4-6', label:'Sonnet 4.6'},
   {id:'claude-sonnet-4-5', label:'Sonnet 4.5'},
   {id:'claude-haiku-4-5', label:'Haiku 4.5'},
 ];
@@ -736,6 +736,11 @@ function variantOptions(selected) {
   return base.map(v => `<option value="${esc(v.id)}" ${v.id === selected ? 'selected' : ''}>${esc(v.label || v.id)}</option>`).join('');
 }
 
+function fromVariantOptions(selected) {
+  const base = [{id:'', label:'Any'}].concat(variantCatalog.length ? variantCatalog : [{id:'default',label:'Default'},{id:'long-context',label:'Long Context 1M'}]);
+  return base.map(v => `<option value="${esc(v.id)}" ${v.id === selected ? 'selected' : ''}>${esc(v.label || v.id || 'Any')}</option>`).join('');
+}
+
 function modelOptions(models, selected) {
   const seen = new Set();
   const opts = [];
@@ -757,7 +762,7 @@ function renderFallbackRules() {
   const rows = rules.map((r, i) => `<div class="row f" data-rule="${i}">
     <label class="routeToggle"><input type="checkbox" data-field="enabled" ${r.enabled ? 'checked' : ''}> on</label>
     <select class="routeSelect" data-field="from_model">${modelOptions(claudeFromModels, r.from_model || '')}</select>
-    <input class="routeInput" data-field="from_variant" value="${esc(r.from_variant || '')}" placeholder="any">
+    <select class="routeSelect" data-field="from_variant">${fromVariantOptions(r.from_variant || '')}</select>
     <select class="routeSelect" data-field="to_model">${modelOptions(claudeVertexModels, r.to_model || '')}</select>
     <select class="routeSelect" data-field="to_variant">${variantOptions(r.to_variant || 'preserve')}</select>
     <span class="actions"><button class="btn danger" data-act="deleteFallback">×</button></span>
