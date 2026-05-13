@@ -104,12 +104,17 @@ func parseConfigPath(args []string) string {
 }
 
 func cmdServe(args []string) error {
-	cfg, err := LoadConfig(parseConfigPath(args))
+	configPath := parseConfigPath(args)
+	cfg, err := LoadConfig(configPath)
 	if err != nil {
 		return err
 	}
 	logger := newLogger(cfg.Log.Level)
 	slog.SetDefault(logger)
+
+	if err := syncAdminTokenFile(configPath, cfg.Server.AdminToken); err != nil {
+		logger.Warn("admin token file sync failed", "err", err)
+	}
 
 	if err := os.MkdirAll(cfg.Paths.DataDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir data: %w", err)
@@ -523,6 +528,21 @@ func cmdAddAccount(args []string) error {
 	}
 	fmt.Println("added:", acc.Email)
 	return nil
+}
+
+func syncAdminTokenFile(configPath, token string) error {
+	token = strings.TrimSpace(token)
+	if token == "" || configPath == "" {
+		return nil
+	}
+	dir := filepath.Dir(configPath)
+	if dir == "." || dir == "" {
+		return nil
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, ".admin_token"), []byte(token+"\n"), 0o600)
 }
 
 func cmdStatus(args []string) error {
