@@ -53,6 +53,7 @@ main{padding:18px 24px;max-width:1400px;margin:0 auto}
 .term .row.head:hover{background:var(--panel2)}
 .term .row.k{grid-template-columns:14px 1fr 90px 90px 100px 200px 130px}
 .term .row.c{grid-template-columns:14px 240px 80px 180px 1fr 1fr 76px 180px 130px}
+.term .row.f{grid-template-columns:52px 1fr 130px 1fr 150px 92px}
 
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%}
 .dot.ok{background:var(--ok)}
@@ -118,6 +119,13 @@ main{padding:18px 24px;max-width:1400px;margin:0 auto}
 .modal p{color:var(--mute);font-size:11px;margin:0 0 12px}
 .modal textarea{width:100%;min-height:180px;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:10px;font-family:var(--mono);font-size:12px;resize:vertical}
 .modal textarea:focus{outline:none;border-color:var(--accent)}
+.routeTools{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin:8px 0}
+.routeStatus{font-family:var(--mono);font-size:11px;color:var(--mute)}
+.routeStatus.ok{color:var(--ok)}
+.routeStatus.err{color:var(--bad)}
+.routeInput,.routeSelect{width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:5px 7px;font-family:var(--mono);font-size:11px}
+.routeInput:focus,.routeSelect:focus{outline:none;border-color:var(--accent)}
+.routeToggle{display:flex;align-items:center;gap:5px;color:var(--mute);font-family:var(--mono);font-size:11px}
 .modal .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
 .modal .modal-actions button{padding:6px 16px;border-radius:5px;cursor:pointer;font-size:12px;font-family:var(--mono)}
 .modal .btn-primary{background:var(--accent);color:#fff;border:none}
@@ -142,6 +150,7 @@ main{padding:18px 24px;max-width:1400px;margin:0 auto}
   .term .row{grid-template-columns:14px 200px 50px 160px 1fr 1fr 70px 130px}
   .term .row.k{grid-template-columns:14px 1fr 90px 90px 100px 200px}
   .term .row.c{grid-template-columns:14px 1fr 80px 120px 1fr 1fr 70px 130px}
+  .term .row.f{grid-template-columns:44px 1fr 100px 1fr 120px 70px}
   .term .row.c > :nth-child(8){display:none}
   .term .row > :nth-last-child(1){display:none}
 }
@@ -206,6 +215,20 @@ main{padding:18px 24px;max-width:1400px;margin:0 auto}
     <div class="add-status hidden" id="claudeAddStatus"></div>
     <div class="info-banner">Click "Add Claude account" to get an auth URL — open it in any browser, then paste the redirect URL back. Primary/Secondary are best-effort Claude OAuth usage windows: 5h and 7d. Alternatively: <button class="btn" id="importClaudeJSON">Import JSON</button>.</div>
     <div id="claudeList"></div>
+  </div>
+  <div class="section">
+    <div class="head">
+      <h2>Claude fallback routing</h2>
+      <div class="routeStatus" id="gcpStatus">GCP: checking</div>
+    </div>
+    <div class="info-banner">When enabled, /v1/messages routes Claude OAuth pool first, then Vertex AI fallback. Anthropic API keys are skipped for matched fallback traffic.</div>
+    <div id="fallbackList"></div>
+    <div class="routeTools">
+      <label class="routeToggle"><input type="checkbox" id="fallbackEnabled"> enabled</label>
+      <span class="routeStatus" id="fallbackStatus"></span>
+      <button class="btn" id="addFallbackRule">Add rule</button>
+      <button class="add" id="saveFallbackRules">Save routing</button>
+    </div>
   </div>
 </div>
 
@@ -317,6 +340,8 @@ $('logout').onclick = async () => {
 $('refreshAll').onclick = load;
 
 let activeTab = localStorage.getItem('proxygate_tab') || 'openai';
+let fallbackPolicy = {enabled:true,rules:[]};
+let variantCatalog = [];
 function setTab(name) {
   if (!['openai','claude','keys'].includes(name)) name = 'openai';
   activeTab = name;
@@ -568,7 +593,7 @@ async function load() {
   $('addr').textContent = host;
   $('sAddr').textContent = host;
   try {
-    const [accs, claudeAccs, keys, usage, cost, priceStatus, unpriced] = await Promise.all([
+    const [accs, claudeAccs, keys, usage, cost, priceStatus, unpriced, fallback, gcp] = await Promise.all([
       api('/admin/accounts'),
       api('/admin/claude-accounts').catch(()=>[]),
       api('/admin/keys').catch(()=>[]),
@@ -576,6 +601,8 @@ async function load() {
       api('/admin/usage/cost').catch(()=>({by_account:[], by_key:[], real_cost:0, equivalent_cost:0})),
       api('/admin/pricing/status').catch(()=>null),
       api('/admin/pricing/unpriced').catch(()=>[]),
+      api('/admin/claude-fallback').catch(()=>null),
+      api('/admin/gcp').catch(()=>null),
     ]);
     const healthy = accs.filter(a => !a.dead && !a.disabled && !a.cooldown_until).length;
     const healthyClaude = claudeAccs.filter(a => !a.dead && !a.disabled && !a.cooldown_until).length;
@@ -631,6 +658,13 @@ async function load() {
       : '<div class="empty">No Claude accounts</div>';
     cList.querySelectorAll('button[data-act]').forEach(btn => btn.onclick = onClaudeAction);
 
+    if (fallback) {
+      fallbackPolicy = fallback.policy || fallbackPolicy;
+      variantCatalog = fallback.variants || variantCatalog;
+      renderFallbackRules();
+    }
+    renderGCPStatus(gcp);
+
     const kList = $('keyList');
     kList.innerHTML = keys.length
       ? `<div class="term">${keyHead}${keys.map(k => renderKey(k, keyCostMap[k.id])).join('')}</div>${renderByModel(cost.by_key, 'real')}`
@@ -663,6 +697,66 @@ function renderByModel(rows, kind) {
   if (!items.length) return '';
   const label = kind === 'equivalent' ? 'equivalent' : 'real';
   return `<div class="bymodel">today by model (${label}): ${items.map(i => `<span class="m"><b>${esc(i.model)}${i.tier ? '@'+esc(i.tier) : ''}</b> ${i.unpriced ? '<span class="cost unpriced">unpriced</span>' : fmtUSD(i.cost)} (${fmtNum(i.requests)})</span>`).join('')}</div>`;
+}
+
+function renderGCPStatus(gcp) {
+  const el = $('gcpStatus');
+  if (!el) return;
+  el.classList.remove('ok','err');
+  if (!gcp) {
+    el.textContent = 'GCP: unavailable';
+    el.classList.add('err');
+    return;
+  }
+  const loc = [gcp.project_id, gcp.location].filter(Boolean).join('/');
+  if (gcp.available) {
+    el.textContent = `GCP: ${loc} · ${gcp.auth_method || 'auth'}`;
+    el.classList.add('ok');
+  } else {
+    el.textContent = `GCP: ${loc || 'not detected'}${gcp.error ? ' · '+gcp.error : ''}`;
+    el.classList.add('err');
+  }
+}
+
+function variantOptions(selected) {
+  const base = variantCatalog.length ? variantCatalog : [{id:'preserve',label:'Preserve'},{id:'thinking-32k',label:'Thinking 32k'},{id:'none',label:'None'}];
+  return base.map(v => `<option value="${esc(v.id)}" ${v.id === selected ? 'selected' : ''}>${esc(v.label || v.id)}</option>`).join('');
+}
+
+function renderFallbackRules() {
+  $('fallbackEnabled').checked = !!fallbackPolicy.enabled;
+  const rules = fallbackPolicy.rules || [];
+  const head = `<div class="row head f"><span>On</span><span>From model</span><span>From variant</span><span>To Vertex model</span><span>To variant</span><span style="text-align:right">Actions</span></div>`;
+  const rows = rules.map((r, i) => `<div class="row f" data-rule="${i}">
+    <label class="routeToggle"><input type="checkbox" data-field="enabled" ${r.enabled ? 'checked' : ''}> on</label>
+    <input class="routeInput" data-field="from_model" value="${esc(r.from_model || '')}" placeholder="claude-opus-4-7">
+    <input class="routeInput" data-field="from_variant" value="${esc(r.from_variant || '')}" placeholder="any">
+    <input class="routeInput" data-field="to_model" value="${esc(r.to_model || '')}" placeholder="claude-sonnet-4-6">
+    <select class="routeSelect" data-field="to_variant">${variantOptions(r.to_variant || 'preserve')}</select>
+    <span class="actions"><button class="btn danger" data-act="deleteFallback">×</button></span>
+  </div>`).join('');
+  $('fallbackList').innerHTML = `<div class="term">${head}${rows}</div>`;
+  $('fallbackList').querySelectorAll('input,select').forEach(el => {
+    el.onchange = onFallbackField;
+    el.oninput = onFallbackField;
+  });
+  $('fallbackList').querySelectorAll('button[data-act="deleteFallback"]').forEach(btn => btn.onclick = onDeleteFallbackRule);
+}
+
+function onFallbackField(e) {
+  const row = e.target.closest('.row');
+  if (!row) return;
+  const idx = Number(row.dataset.rule);
+  const field = e.target.dataset.field;
+  if (!fallbackPolicy.rules[idx]) return;
+  fallbackPolicy.rules[idx][field] = field === 'enabled' ? e.target.checked : e.target.value.trim();
+}
+
+function onDeleteFallbackRule(e) {
+  const row = e.target.closest('.row');
+  const idx = Number(row.dataset.rule);
+  fallbackPolicy.rules.splice(idx, 1);
+  renderFallbackRules();
 }
 
 async function onAccAction(e) {
@@ -810,6 +904,42 @@ $('manualOAuthFinish').onclick = async () => {
     try { const j = JSON.parse(msg); $('manualOAuthErr').textContent = j.error || msg; }
     catch { $('manualOAuthErr').textContent = msg; }
   } finally { btn.disabled = false; }
+};
+
+$('addFallbackRule').onclick = () => {
+  fallbackPolicy.rules = fallbackPolicy.rules || [];
+  fallbackPolicy.rules.push({enabled:true,from_model:'',from_variant:'',to_model:'',to_variant:'preserve'});
+  renderFallbackRules();
+};
+
+$('fallbackEnabled').onchange = () => {
+  fallbackPolicy.enabled = $('fallbackEnabled').checked;
+};
+
+$('saveFallbackRules').onclick = async () => {
+  const btn = $('saveFallbackRules');
+  const st = $('fallbackStatus');
+  btn.disabled = true;
+  st.classList.remove('ok','err');
+  st.textContent = 'saving...';
+  fallbackPolicy.enabled = $('fallbackEnabled').checked;
+  try {
+    const r = await api('/admin/claude-fallback', {
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({policy:fallbackPolicy}),
+    });
+    fallbackPolicy = r.policy || fallbackPolicy;
+    renderFallbackRules();
+    st.textContent = 'saved';
+    st.classList.add('ok');
+    setTimeout(() => { st.textContent = ''; st.classList.remove('ok'); }, 3000);
+  } catch(e) {
+    st.textContent = e.message || String(e);
+    st.classList.add('err');
+  } finally {
+    btn.disabled = false;
+  }
 };
 
 setInterval(() => { if (!$('app').classList.contains('hidden')) load(); }, 30000);

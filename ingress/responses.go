@@ -55,15 +55,15 @@ type TokenRefresher interface {
 }
 
 type ResponsesHandler struct {
-	Pool       *broker.Pool
-	KeyPool    *broker.APIKeyPool
-	ChatGPT    *provider.ChatGPTClient
-	OpenAI     *provider.OpenAIClient
-	Recorder   RequestRecorder
-	Refresher  TokenRefresher
-	Pricer     Pricer
-	Priority   string
-	Logger     *slog.Logger
+	Pool      *broker.Pool
+	KeyPool   *broker.APIKeyPool
+	ChatGPT   *provider.ChatGPTClient
+	OpenAI    *provider.OpenAIClient
+	Recorder  RequestRecorder
+	Refresher TokenRefresher
+	Pricer    Pricer
+	Priority  string
+	Logger    *slog.Logger
 }
 
 func (h *ResponsesHandler) priceRec(rec *UsageRecord) {
@@ -95,6 +95,7 @@ type sourceKind int
 const (
 	sourceAccount sourceKind = iota
 	sourceAPIKey
+	sourceVertexAI
 )
 
 func (h *ResponsesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -619,8 +620,8 @@ func extractNonStreamingUsage(rec *UsageRecord, body []byte) {
 		Model       string `json:"model"`
 		ServiceTier string `json:"service_tier"`
 		Usage       struct {
-			InputTokens         int64 `json:"input_tokens"`
-			InputTokensDetails  struct {
+			InputTokens        int64 `json:"input_tokens"`
+			InputTokensDetails struct {
 				CachedTokens int64 `json:"cached_tokens"`
 			} `json:"input_tokens_details"`
 			OutputTokens        int64 `json:"output_tokens"`

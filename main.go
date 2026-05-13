@@ -157,6 +157,7 @@ func cmdServe(args []string) error {
 	loadAccountStats(st, pool)
 	loadClaudeStats(st, claudePool)
 	loadKeyStats(st, keyPool)
+	claudeFallbackRuntime := ingress.NewClaudeFallbackRuntime(loadClaudeFallbackPolicy(st))
 
 	ctxWatch, stopWatch := context.WithCancel(context.Background())
 	defer stopWatch()
@@ -250,14 +251,17 @@ func cmdServe(args []string) error {
 	if v := os.Getenv("PROXYGATE_ANTHROPIC_BASE_URL"); v != "" {
 		anthropicClient.BaseURL = v
 	}
+	vertexClient := provider.NewAnthropicVertexClient(context.Background())
 	messages := &ingress.MessagesHandler{
 		ClaudePool:      claudePool,
 		KeyPool:         keyPool,
 		Anthropic:       anthropicClient,
+		Vertex:          vertexClient,
 		Recorder:        recorder,
 		ClaudeRefresher: claudeRefresher,
 		Pricer:          priceSrc,
 		Priority:        cfg.Routing.Priority,
+		FallbackRuntime: claudeFallbackRuntime,
 		Logger:          logger,
 	}
 	mux.Handle("POST /v1/messages", ingress.RequireProxyTokenOr(proxyToken, messages, func(token string) bool {
@@ -434,6 +438,8 @@ func cmdServe(args []string) error {
 		Recorder:         recorder,
 		Refresher:        refresher,
 		ClaudeRefresher:  claudeRefresher,
+		ClaudeFallback:   claudeFallbackRuntime,
+		Vertex:           vertexClient,
 		Pricing:          priceService,
 		Queue:            queue,
 		Token:            cfg.Server.AdminToken,
@@ -831,4 +837,16 @@ func loadClaudeStats(st *store.Store, pool *broker.ClaudePool) {
 		}
 		acc.ApplyStats(s)
 	}
+}
+
+func loadClaudeFallbackPolicy(st *store.Store) ingress.ClaudeFallbackPolicy {
+	raw, err := st.Get(store.BucketSettings, control.ClaudeFallbackSettingsKey)
+	if err != nil {
+		return ingress.DefaultClaudeFallbackPolicy()
+	}
+	policy, err := ingress.ParseClaudeFallbackPolicy(raw)
+	if err != nil {
+		return ingress.DefaultClaudeFallbackPolicy()
+	}
+	return policy
 }

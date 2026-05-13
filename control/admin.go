@@ -15,12 +15,14 @@ import (
 
 	"github.com/FL-Penly/proxy-gate/auth"
 	"github.com/FL-Penly/proxy-gate/broker"
+	"github.com/FL-Penly/proxy-gate/ingress"
 	"github.com/FL-Penly/proxy-gate/pricing"
 	"github.com/FL-Penly/proxy-gate/provider"
 	"github.com/FL-Penly/proxy-gate/store"
 )
 
 const sessionCookie = "proxygate_admin"
+const ClaudeFallbackSettingsKey = "claude_fallback_policy"
 
 type OAuthStarter func(ctx context.Context) (authURL string, err error)
 
@@ -45,6 +47,8 @@ type AdminAPI struct {
 	Recorder         *Recorder
 	Refresher        *TokenRefresher
 	ClaudeRefresher  *ClaudeTokenRefresher
+	ClaudeFallback   *ingress.ClaudeFallbackRuntime
+	Vertex           *provider.AnthropicVertexClient
 	Pricing          PricingService
 	Queue            *Queue
 	Token            string
@@ -120,6 +124,9 @@ func (a *AdminAPI) Mount(mux *http.ServeMux) {
 	mux.Handle("POST /admin/ui/claude-oauth-manual-finish", a.gate(a.uiClaudeOAuthManualFinish))
 	mux.Handle("GET /admin/accounts", a.gate(a.listAccounts))
 	mux.Handle("GET /admin/claude-accounts", a.gate(a.listClaudeAccounts))
+	mux.Handle("GET /admin/claude-fallback", a.gate(a.getClaudeFallback))
+	mux.Handle("PUT /admin/claude-fallback", a.gate(a.putClaudeFallback))
+	mux.Handle("GET /admin/gcp", a.gate(a.gcpStatus))
 	mux.Handle("GET /admin/usage", a.gate(a.usage))
 	mux.Handle("GET /admin/status", a.gate(a.status))
 	mux.Handle("POST /admin/accounts/{email}/disable", a.gate(a.toggleAccount(true)))
@@ -665,6 +672,55 @@ func (a *AdminAPI) listClaudeAccounts(w http.ResponseWriter, _ *http.Request) {
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+func (a *AdminAPI) getClaudeFallback(w http.ResponseWriter, _ *http.Request) {
+	policy := ingress.DefaultClaudeFallbackPolicy()
+	if a.ClaudeFallback != nil {
+		policy = a.ClaudeFallback.Policy()
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"policy":   policy.WithDefaults(),
+		"variants": ingress.ClaudeVariantCatalog(),
+	})
+}
+
+func (a *AdminAPI) putClaudeFallback(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Policy ingress.ClaudeFallbackPolicy `json:"policy"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64*1024)).Decode(&body); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	policy := body.Policy.WithDefaults()
+	for _, rule := range policy.Rules {
+		if rule.Enabled && (rule.FromModel == "" || rule.ToModel == "") {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "enabled fallback rules require from_model and to_model"})
+			return
+		}
+		if _, err := ingress.ApplyClaudeVariant([]byte(`{"messages":[]}`), rule.ToVariant); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+	}
+	if a.ClaudeFallback != nil {
+		a.ClaudeFallback.Set(policy)
+	}
+	if a.Queue != nil {
+		if raw, err := json.Marshal(policy); err == nil {
+			_ = a.Queue.Put(store.BucketSettings, ClaudeFallbackSettingsKey, raw)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"policy": policy})
+}
+
+func (a *AdminAPI) gcpStatus(w http.ResponseWriter, r *http.Request) {
+	if a.Vertex == nil {
+		writeJSON(w, http.StatusOK, provider.VertexAnthropicStatus{Available: false, Error: "vertex client not configured"})
+		return
+	}
+	writeJSON(w, http.StatusOK, a.Vertex.Status(r.Context()))
 }
 
 func (a *AdminAPI) usage(w http.ResponseWriter, _ *http.Request) {

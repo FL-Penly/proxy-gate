@@ -20,10 +20,13 @@ type MessagesHandler struct {
 	ClaudePool      *broker.ClaudePool
 	KeyPool         *broker.APIKeyPool
 	Anthropic       *provider.AnthropicClient
+	Vertex          *provider.AnthropicVertexClient
 	Recorder        RequestRecorder
 	ClaudeRefresher ClaudeTokenRefresher
 	Pricer          Pricer
 	Priority        string
+	FallbackPolicy  ClaudeFallbackPolicy
+	FallbackRuntime *ClaudeFallbackRuntime
 	Logger          *slog.Logger
 }
 
@@ -59,12 +62,21 @@ func (h *MessagesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if outcome != outcomeSourceUnavailable {
 				return
 			}
+		case sourceVertexAI:
+			outcome := h.serveViaVertexFallback(w, r, body, streaming, start)
+			if outcome != outcomeSourceUnavailable {
+				return
+			}
 		case sourceAPIKey:
 			outcome := h.serveViaAnthropicKeyPool(w, r, body, model, streaming, start)
 			if outcome != outcomeSourceUnavailable {
 				return
 			}
 		}
+	}
+	if h.fallbackEnabled() {
+		writeJSONError(w, http.StatusServiceUnavailable, "All Claude accounts exhausted and no Vertex AI fallback matched or succeeded.")
+		return
 	}
 	writeJSONError(w, http.StatusServiceUnavailable, "All Claude accounts and Anthropic API keys exhausted.")
 }
@@ -73,6 +85,9 @@ func (h *MessagesHandler) totalConfigured() int {
 	n := 0
 	if h.ClaudePool != nil {
 		n += h.ClaudePool.Len()
+	}
+	if h.fallbackEnabled() && h.Vertex != nil {
+		n++
 	}
 	if h.KeyPool != nil {
 		for _, k := range h.KeyPool.List() {
@@ -85,6 +100,9 @@ func (h *MessagesHandler) totalConfigured() int {
 }
 
 func (h *MessagesHandler) sourceOrder() []sourceKind {
+	if h.fallbackEnabled() {
+		return []sourceKind{sourceAccount, sourceVertexAI}
+	}
 	if h.ClaudePool == nil && h.KeyPool == nil {
 		return nil
 	}
@@ -98,6 +116,20 @@ func (h *MessagesHandler) sourceOrder() []sourceKind {
 		return []sourceKind{sourceAPIKey, sourceAccount}
 	}
 	return []sourceKind{sourceAccount, sourceAPIKey}
+}
+
+func (h *MessagesHandler) fallbackEnabled() bool {
+	if h.FallbackRuntime != nil {
+		return h.FallbackRuntime.Enabled()
+	}
+	return h.FallbackPolicy.Enabled
+}
+
+func (h *MessagesHandler) fallbackMatch(body []byte, headers http.Header) (ClaudeFallbackMatch, bool) {
+	if h.FallbackRuntime != nil {
+		return h.FallbackRuntime.Match(body, headers)
+	}
+	return h.FallbackPolicy.Match(body, headers)
 }
 
 func (h *MessagesHandler) serveViaClaudePool(w http.ResponseWriter, r *http.Request, body []byte, model string, streaming bool, start time.Time) sourceOutcome {
@@ -289,6 +321,83 @@ func (h *MessagesHandler) serveViaAnthropicKeyPool(w http.ResponseWriter, r *htt
 		}
 		h.record(rec)
 		lease.Release()
+		return outcomeServed
+	}
+	return outcomeSourceUnavailable
+}
+
+func (h *MessagesHandler) serveViaVertexFallback(w http.ResponseWriter, r *http.Request, body []byte, streaming bool, start time.Time) sourceOutcome {
+	if h.Vertex == nil || !h.fallbackEnabled() {
+		return outcomeSourceUnavailable
+	}
+	match, ok := h.fallbackMatch(body, r.Header)
+	if !ok {
+		return outcomeSourceUnavailable
+	}
+	targetBody, err := ApplyClaudeTarget(body, match.ToModel, match.ToVariant)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid claude fallback variant: "+err.Error())
+		return outcomeFailed
+	}
+	logger := h.logger()
+	level5xx := 0
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		resp, err := h.Vertex.Forward(r.Context(), provider.AnthropicVertexForwardRequest{
+			Body:            targetBody,
+			Model:           match.ToModel,
+			Streaming:       streaming,
+			IncomingHeaders: r.Header,
+		})
+		if err != nil {
+			if ctxCanceled(r.Context()) {
+				return outcomeFailed
+			}
+			logger.Warn("vertex anthropic forward error", "err", err, "from_model", match.FromModel, "to_model", match.ToModel)
+			if attempt+1 < maxAttempts && sleepCtx(r.Context(), broker.BackoffFor5xx(level5xx)) {
+				level5xx++
+				continue
+			}
+			writeJSONError(w, http.StatusBadGateway, "vertex anthropic forward error")
+			return outcomeFailed
+		}
+		if resp.StatusCode == http.StatusTooManyRequests {
+			b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+			_ = resp.Body.Close()
+			if attempt+1 < maxAttempts {
+				wait := broker.ParseRetryAfter(resp.Header, b, time.Now())
+				if wait > 0 && sleepCtx(r.Context(), minDuration(wait, time.Duration(exhaustedRetryWaitMs)*time.Millisecond)) {
+					continue
+				}
+			}
+			writeJSONError(w, http.StatusTooManyRequests, "vertex anthropic rate limited")
+			return outcomeFailed
+		}
+		if resp.StatusCode >= 500 && resp.StatusCode < 600 {
+			_ = resp.Body.Close()
+			level5xx++
+			if attempt+1 < maxAttempts && sleepCtx(r.Context(), broker.BackoffFor5xx(level5xx-1)) {
+				continue
+			}
+			writeJSONError(w, http.StatusBadGateway, "vertex anthropic upstream unavailable")
+			return outcomeFailed
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+			_ = resp.Body.Close()
+			writeUpstreamError(w, resp, b)
+			return outcomeFailed
+		}
+
+		rec := h.serveSuccess(w, resp, UsageRecord{Status: resp.StatusCode, Success: true, Model: match.ToModel}, streaming)
+		rec.KeyID = "vertex-ai"
+		rec.Provider = "vertex-ai"
+		rec.Route = "/v1/messages"
+		rec.DurationMs = time.Since(start).Milliseconds()
+		if rec.Model == "" || NormalizeClaudeModel(rec.Model) == match.FromModel {
+			rec.Model = match.ToModel
+		}
+		h.priceRec(&rec)
+		h.record(rec)
 		return outcomeServed
 	}
 	return outcomeSourceUnavailable
