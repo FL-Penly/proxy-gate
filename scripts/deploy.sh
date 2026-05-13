@@ -43,9 +43,9 @@ if [ "$OS" = "Darwin" ]; then
     launchctl bootstrap "gui/$UID" "$HOME/Library/LaunchAgents/$LAUNCHD_LABEL.plist"
   fi
 else
-  if pgrep -f 'proxy-gate serve' >/dev/null 2>&1; then
+  if pgrep -x proxy-gate >/dev/null 2>&1; then
     echo "==> stopping old proxy-gate"
-    pkill -f 'proxy-gate serve' || true
+    pkill -x proxy-gate || true
     sleep 1
   fi
   echo "==> starting proxy-gate (nohup)"
@@ -55,7 +55,7 @@ fi
 
 for i in 1 2 3 4 5 6 7 8; do
   if curl -s -m 1 http://127.0.0.1:19527/healthz | grep -q ok; then
-    echo "==> healthz ok (PID $(pgrep -f 'proxy-gate serve' | head -1))"
+    echo "==> healthz ok (PID $(pgrep -x proxy-gate | head -1))"
     exit 0
   fi
   sleep 1
