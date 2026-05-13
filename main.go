@@ -95,9 +95,12 @@ Commands:
 }
 
 func parseConfigPath(args []string) string {
-	for _, a := range args {
+	for i, a := range args {
 		if strings.HasPrefix(a, "--config=") {
 			return strings.TrimPrefix(a, "--config=")
+		}
+		if a == "--config" && i+1 < len(args) {
+			return args[i+1]
 		}
 	}
 	return "./config.toml"
