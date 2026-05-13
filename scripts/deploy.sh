@@ -46,7 +46,16 @@ else
   if pgrep -x proxy-gate >/dev/null 2>&1; then
     echo "==> stopping old proxy-gate"
     pkill -x proxy-gate || true
-    sleep 1
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+      if ! pgrep -x proxy-gate >/dev/null 2>&1; then
+        break
+      fi
+      sleep 1
+    done
+    if pgrep -x proxy-gate >/dev/null 2>&1; then
+      echo "error: old proxy-gate did not stop after 10s"
+      exit 1
+    fi
   fi
   echo "==> starting proxy-gate (nohup)"
   cd "$INSTALL_DIR"
