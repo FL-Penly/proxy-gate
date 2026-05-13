@@ -49,7 +49,8 @@ else
     sleep 1
   fi
   echo "==> starting proxy-gate (nohup)"
-  (cd "$INSTALL_DIR" && nohup ./proxy-gate serve --config "$INSTALL_DIR/config.toml" >> /tmp/proxy-gate.log 2>&1 &)
+  cd "$INSTALL_DIR"
+  nohup ./proxy-gate serve --config "$INSTALL_DIR/config.toml" </dev/null >> /tmp/proxy-gate.log 2>&1 &
 fi
 
 for i in 1 2 3 4 5 6 7 8; do
