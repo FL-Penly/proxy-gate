@@ -31,23 +31,25 @@ chmod 755 "$tmp_bin"
 mv -f "$tmp_bin" "$INSTALL_DIR/proxy-gate"
 trap - EXIT
 
-if [ "$OS" != "Darwin" ]; then
-  echo "==> installed $INSTALL_DIR/proxy-gate"
-  if pgrep -f 'proxy-gate serve' >/dev/null 2>&1; then
-    echo "==> proxy-gate is already running; restart it manually to use the new binary"
+if [ "$OS" = "Darwin" ]; then
+  echo "==> ad-hoc codesign (required, otherwise launchd kills with OS_REASON_CODESIGNING)"
+  codesign --force --sign - "$INSTALL_DIR/proxy-gate"
+
+  if launchctl print "gui/$UID/$LAUNCHD_LABEL" >/dev/null 2>&1; then
+    echo "==> launchctl kickstart -k (graceful restart)"
+    launchctl kickstart -k "gui/$UID/$LAUNCHD_LABEL"
+  else
+    echo "==> launchctl bootstrap (first install)"
+    launchctl bootstrap "gui/$UID" "$HOME/Library/LaunchAgents/$LAUNCHD_LABEL.plist"
   fi
-  exit 0
-fi
-
-echo "==> ad-hoc codesign (required, otherwise launchd kills with OS_REASON_CODESIGNING)"
-codesign --force --sign - "$INSTALL_DIR/proxy-gate"
-
-if launchctl print "gui/$UID/$LAUNCHD_LABEL" >/dev/null 2>&1; then
-  echo "==> launchctl kickstart -k (graceful restart)"
-  launchctl kickstart -k "gui/$UID/$LAUNCHD_LABEL"
 else
-  echo "==> launchctl bootstrap (first install)"
-  launchctl bootstrap "gui/$UID" "$HOME/Library/LaunchAgents/$LAUNCHD_LABEL.plist"
+  if pgrep -f 'proxy-gate serve' >/dev/null 2>&1; then
+    echo "==> stopping old proxy-gate"
+    pkill -f 'proxy-gate serve' || true
+    sleep 1
+  fi
+  echo "==> starting proxy-gate (nohup)"
+  nohup "$INSTALL_DIR/proxy-gate" serve >> /tmp/proxy-gate.log 2>&1 &
 fi
 
 for i in 1 2 3 4 5 6 7 8; do
