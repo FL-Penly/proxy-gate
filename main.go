@@ -304,10 +304,21 @@ func cmdServe(args []string) error {
 	}
 	mux.Handle("POST /v1/chat/completions", ingress.RequireProxyToken(proxyToken, chat))
 
+	chatgptHost := chatgptBaseHost(chatgpt.BaseURL)
+
+	mcpHandler := &ingress.MCPHandler{
+		Pool:        pool,
+		Refresher:   refresher,
+		UpstreamURL: chatgptHost + "/backend-api/wham/apps",
+		Logger:      logger,
+	}
+	mux.Handle("/api/codex/apps", mcpHandler)
+	mux.Handle("/backend-api/wham/apps", mcpHandler)
+
 	passthrough := &ingress.PassthroughHandler{
 		Pool:      pool,
 		Refresher: refresher,
-		BaseURL:   chatgptBaseHost(chatgpt.BaseURL),
+		BaseURL:   chatgptHost,
 		Logger:    logger,
 	}
 	modelsProxy := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
