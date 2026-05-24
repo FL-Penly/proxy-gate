@@ -143,8 +143,16 @@ func (l *Lease) PinResponse(responseID string) {
 	_ = l.pool.pinStore.Put(responseID, l.Account.Email, time.Now().Add(l.pool.pinTTL))
 }
 
+func (l *Lease) Hint() LeaseHint {
+	if l == nil {
+		return LeaseHint{}
+	}
+	return l.hint
+}
+
 type LeaseHint struct {
 	Model              string
+	SessionKey         string
 	PreviousResponseID string
 }
 
@@ -156,8 +164,15 @@ func (p *Pool) Lease(_ context.Context, hint LeaseHint) (*Lease, error) {
 	}
 	now := time.Now()
 
-	if hint.PreviousResponseID != "" && p.pinStore != nil {
-		if email, ok := p.pinStore.Lookup(hint.PreviousResponseID); ok {
+	if p.pinStore != nil {
+		for _, key := range []string{hint.SessionKey, hint.PreviousResponseID} {
+			if key == "" {
+				continue
+			}
+			email, ok := p.pinStore.Lookup(key)
+			if !ok {
+				continue
+			}
 			if e, exists := p.accounts[email]; exists && e.account.IsAvailable(now, p.cfg.PrimaryUsedPctMax, p.cfg.SecondaryUsedPctMax) {
 				e.inflight.Add(1)
 				return &Lease{Account: e.account, pool: p, hint: hint}, nil

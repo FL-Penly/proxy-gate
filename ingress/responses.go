@@ -129,6 +129,7 @@ func (h *ResponsesHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	streaming := !isCompact
 	hint := broker.LeaseHint{
 		Model:              model,
+		SessionKey:         sessionPinKey(r.Header),
 		PreviousResponseID: ExtractPreviousResponseID(adapted),
 	}
 
@@ -422,6 +423,21 @@ func (h *ResponsesHandler) attemptForwardAccount(
 		cooldown := broker.ParseRetryAfter(resp.Header, body, time.Now())
 		lease.Account.MarkCooldown(time.Now().Add(cooldown))
 		logger.Info("account rate limited", "account", lease.Account.Email, "cooldown", cooldown)
+		hint := lease.Hint()
+		if hint.SessionKey != "" || hint.PreviousResponseID != "" {
+			ct := resp.Header.Get("Content-Type")
+			if strings.HasPrefix(ct, "application/json") {
+				w.Header().Set("Content-Type", "application/json")
+			} else {
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			}
+			if ra := resp.Header.Get("Retry-After"); ra != "" {
+				w.Header().Set("Retry-After", ra)
+			}
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write(body)
+			return forwardDecision{outcome: outcomeFailed, status: http.StatusTooManyRequests, errMsg: truncate(string(body), 200)}
+		}
 		return forwardDecision{outcome: outcomeRetry}
 	}
 
@@ -464,6 +480,9 @@ func (h *ResponsesHandler) attemptForwardAccount(
 	h.priceRec(&rec)
 	if rec.Success {
 		lease.Account.RecordSuccess(rec.InputTokens, rec.OutputTokens, rec.Cost)
+		if sk := lease.Hint().SessionKey; sk != "" {
+			lease.PinResponse(sk)
+		}
 		if rec.ResponseID != "" {
 			lease.PinResponse(rec.ResponseID)
 		}

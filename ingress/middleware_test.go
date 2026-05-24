@@ -95,20 +95,42 @@ func TestAdaptEmptyInstructionsKeptEmpty(t *testing.T) {
 	}
 }
 
-func TestAdaptForceStoreFalseAndStripsTokens(t *testing.T) {
+func TestAdaptPreservesClientStoreAndStripsTokens(t *testing.T) {
 	body := []byte(`{"model":"x","store":true,"max_output_tokens":2048,"max_tokens":1024,"input":[{"type":"message","role":"user","content":"hi"}]}`)
 	out, err := AdaptForChatGPTBackend(body)
 	if err != nil {
 		t.Fatalf("adapt: %v", err)
 	}
-	if gjson.GetBytes(out, "store").Bool() {
-		t.Errorf("store should be false")
+	if !gjson.GetBytes(out, "store").Bool() {
+		t.Errorf("store=true from client must be preserved (enables upstream response continuity)")
 	}
 	if gjson.GetBytes(out, "max_output_tokens").Exists() {
 		t.Errorf("max_output_tokens should be stripped")
 	}
 	if gjson.GetBytes(out, "max_tokens").Exists() {
 		t.Errorf("max_tokens should be stripped")
+	}
+}
+
+func TestAdaptPreservesClientStoreFalse(t *testing.T) {
+	body := []byte(`{"model":"x","store":false,"input":[{"type":"message","role":"user","content":"hi"}]}`)
+	out, err := AdaptForChatGPTBackend(body)
+	if err != nil {
+		t.Fatalf("adapt: %v", err)
+	}
+	if gjson.GetBytes(out, "store").Bool() {
+		t.Errorf("store=false from client must be preserved")
+	}
+}
+
+func TestAdaptLeavesStoreAbsentWhenClientOmits(t *testing.T) {
+	body := []byte(`{"model":"x","input":[{"type":"message","role":"user","content":"hi"}]}`)
+	out, err := AdaptForChatGPTBackend(body)
+	if err != nil {
+		t.Fatalf("adapt: %v", err)
+	}
+	if gjson.GetBytes(out, "store").Exists() {
+		t.Errorf("store should not be injected when client omits it; got %s", string(out))
 	}
 }
 

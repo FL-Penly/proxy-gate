@@ -25,7 +25,7 @@ func TestParityChatGPTBackendBodyMatchesV1Adapter(t *testing.T) {
 		t.Errorf("expected instructions:\"\" (matches v1's body.instructions=''), got: %s", body)
 	}
 	if !strings.Contains(body, `"store":false`) {
-		t.Errorf("store must be false: %s", body)
+		t.Errorf("client store=false must be preserved (not overwritten): %s", body)
 	}
 	if !strings.Contains(body, `"stream":true`) {
 		t.Errorf("stream must be true for /v1/responses: %s", body)

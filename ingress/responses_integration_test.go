@@ -112,8 +112,8 @@ func TestStreamingResponseRecordsUsage(t *testing.T) {
 	if got := capturedReq.Header.Get("Authorization"); got != "Bearer fake-token" {
 		t.Errorf("upstream Authorization = %q", got)
 	}
-	if !strings.Contains(string(capturedBody), `"store":false`) {
-		t.Errorf("body adaptation failed (store=false missing): %s", capturedBody)
+	if strings.Contains(string(capturedBody), `"store":`) {
+		t.Errorf("store must not be injected when client omits it: %s", capturedBody)
 	}
 	if !strings.Contains(string(capturedBody), `"instructions":`) {
 		t.Errorf("body adaptation failed (instructions field MUST exist or upstream rejects with 400): %s", capturedBody)
@@ -242,7 +242,7 @@ func TestGzipBodyDecompressedOnce(t *testing.T) {
 	rec := &fakeRecorder{}
 	h := newTestHandler(t, upstream, newAccount(), rec)
 
-	original := `{"model":"gpt-5","stream":false}`
+	original := `{"model":"gpt-5","stream":false,"store":false}`
 	var compressed bytes.Buffer
 	gz := gzip.NewWriter(&compressed)
 	_, _ = gz.Write([]byte(original))
@@ -262,7 +262,7 @@ func TestGzipBodyDecompressedOnce(t *testing.T) {
 		t.Fatalf("upstream body not valid JSON (decompressed once?): %v - %q", err, capturedBody)
 	}
 	if sent["store"] != false {
-		t.Errorf("store adaptation lost: %v", sent)
+		t.Errorf("client store=false must be preserved through gzip decode: %v", sent)
 	}
 }
 

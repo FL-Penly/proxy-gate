@@ -78,11 +78,7 @@ func adaptForChatGPTBackend(body []byte, compact bool) ([]byte, error) {
 			return nil, err
 		}
 	}
-	body, err := sjson.SetBytes(body, "store", false)
-	if err != nil {
-		return nil, err
-	}
-	body, err = sjson.SetBytes(body, "stream", !compact)
+	body, err := sjson.SetBytes(body, "stream", !compact)
 	if err != nil {
 		return nil, err
 	}
@@ -119,6 +115,15 @@ func ExtractServiceTier(body []byte) string {
 
 func ExtractPreviousResponseID(body []byte) string {
 	return gjson.GetBytes(body, "previous_response_id").String()
+}
+
+func sessionPinKey(h http.Header) string {
+	for _, name := range []string{"session_id", "X-Session-Affinity"} {
+		if v := strings.TrimSpace(h.Get(name)); v != "" {
+			return "session:" + v
+		}
+	}
+	return ""
 }
 
 var ErrAdminTokenMissing = errors.New("admin: token not configured")

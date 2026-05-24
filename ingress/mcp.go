@@ -43,7 +43,7 @@ var mcpPassthroughHeaders = []string{
 func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.Header.Get("Mcp-Session-Id")
 
-	hint := broker.LeaseHint{}
+	hint := broker.LeaseHint{SessionKey: sessionPinKey(r.Header)}
 	if sessionID != "" {
 		hint.PreviousResponseID = "mcp:" + sessionID
 	}
@@ -80,8 +80,14 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	if sid := resp.Header.Get("Mcp-Session-Id"); sid != "" {
-		lease.PinResponse("mcp:" + sid)
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		lease.Account.RecordSuccess(0, 0, 0)
+		if sk := hint.SessionKey; sk != "" {
+			lease.PinResponse(sk)
+		}
+		if sid := resp.Header.Get("Mcp-Session-Id"); sid != "" {
+			lease.PinResponse("mcp:" + sid)
+		}
 	}
 
 	for k, vs := range resp.Header {

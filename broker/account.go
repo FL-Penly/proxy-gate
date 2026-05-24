@@ -170,6 +170,8 @@ func (a *Account) IsAvailable(now time.Time, primaryMax, secondaryMax float64) b
 	return true
 }
 
+const usageEstimatePerCall = 0.025
+
 func (a *Account) RecordSuccess(input, output int64, cost float64) {
 	a.updateState(func(st *accountState) {
 		st.TotalRequests++
@@ -177,6 +179,10 @@ func (a *Account) RecordSuccess(input, output int64, cost float64) {
 		st.TotalOutputTkn += output
 		st.TotalCost += cost
 		st.LastUsed = time.Now()
+		st.PrimaryUsedPct += usageEstimatePerCall
+		if st.PrimaryUsedPct > 1.0 {
+			st.PrimaryUsedPct = 1.0
+		}
 	})
 }
 
